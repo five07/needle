@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/five07/tidal-tui/internal/player"
 )
 
 // testEnv returns a getenv backed by temp XDG dirs, plus those dirs.
@@ -67,10 +69,10 @@ func TestRun(t *testing.T) {
 		{
 			name:       "config file and env are applied",
 			env:        map[string]string{"TIDAL_CLIENT_ID": "envid"},
-			config:     "quality = \"lossless\"\n[audio]\nmode = \"exclusive\"\n",
+			config:     "quality = \"lossless\"\n[audio]\nmode = \"exclusive\"\ndevice = \"alsa/hw:CARD=Vestri,DEV=0\"\n",
 			wantStdout: "Logged in as listener (US).\n",
 			wantStderr: "not implemented yet",
-			wantLog:    []string{"quality=lossless", "audio_mode=exclusive", "client_id_set=true"},
+			wantLog:    []string{"quality=lossless", "audio_mode=exclusive", `audio_device="alsa/hw:CARD=Vestri,DEV=0"`, "client_id_set=true"},
 		},
 		{
 			name:       "invalid config exits one naming the key",
@@ -196,5 +198,51 @@ func TestMainExitCode(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("main %v exit = %d, want %d", tt.args, got, tt.want)
 		}
+	}
+}
+
+func TestListDevices(t *testing.T) {
+	root := t.TempDir()
+	for path, content := range map[string]string{
+		"card4/id": "Vestri\n", "card4/usbid": "x\n", "card4/pcm0p/info": "id: USB Audio\n",
+	} {
+		p := filepath.Join(root, path)
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(content), 0o644)
+	}
+	tests := []struct {
+		name       string
+		root       string
+		helpErr    error
+		wantCode   int
+		wantStdout []string
+		wantStderr string
+	}{
+		{name: "both lists", root: root, wantStdout: []string{"alsa/hw:CARD=Vestri,DEV=0", "pipewire/alsa_output.usb-x", "auto"}},
+		{name: "mpv missing", root: root, helpErr: player.ErrMPVNotFound, wantStdout: []string{"alsa/hw:CARD=Vestri,DEV=0", "unavailable: player: mpv is not installed"}},
+		{name: "bad ALSA root", root: "[bad", wantCode: 1, wantStderr: "list ALSA cards"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newFakeTIDAL(t).deps()
+			d.asoundRoot = tt.root
+			if tt.helpErr != nil {
+				d.mpvDeviceHelp = func(context.Context) ([]byte, error) { return nil, tt.helpErr }
+			}
+			var stdout, stderr bytes.Buffer
+			// No HOME or config needed: the flag runs before both.
+			getenv := func(string) string { return "" }
+			if code := run(context.Background(), d, []string{"-list-devices"}, getenv, &stdout, &stderr); code != tt.wantCode {
+				t.Fatalf("code = %d, stderr %s", code, stderr.String())
+			}
+			for _, w := range tt.wantStdout {
+				if !strings.Contains(stdout.String(), w) {
+					t.Errorf("stdout missing %q:\n%s", w, stdout.String())
+				}
+			}
+			if !strings.Contains(stderr.String(), tt.wantStderr) {
+				t.Errorf("stderr = %q", stderr.String())
+			}
+		})
 	}
 }

@@ -64,6 +64,9 @@ func newFakeTIDAL(t *testing.T) *fakeTIDAL {
 
 func (f *fakeTIDAL) deps() deps {
 	return deps{
+		mpvDeviceHelp: func(context.Context) ([]byte, error) {
+			return []byte("  'auto' (Autoselect device)\n  'pipewire/alsa_output.usb-x' (USB DAC)\n"), nil
+		},
 		newOAuth: func(id string) *auth.OAuth {
 			o := auth.NewOAuth(id)
 			o.TokenURL = f.srv.URL + "/token"

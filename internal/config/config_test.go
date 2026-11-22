@@ -107,6 +107,21 @@ client_id = "abc_DEF-123.x"
 			wantKey: "audio.device",
 		},
 		{
+			name:    "exclusive mode with the default device",
+			body:    new("[audio]\nmode = \"exclusive\"\n"),
+			wantKey: "audio.device",
+		},
+		{
+			name:    "exclusive mode with a converting ALSA device",
+			body:    new("[audio]\nmode = \"exclusive\"\ndevice = \"alsa/plughw:CARD=Vestri,DEV=0\"\n"),
+			wantKey: "audio.device",
+		},
+		{
+			name:    "exclusive mode with a PipeWire sink",
+			body:    new("[audio]\nmode = \"exclusive\"\ndevice = \"pipewire/alsa_output.usb-x\"\n"),
+			wantKey: "audio.device",
+		},
+		{
 			name:    "audio device with control characters",
 			body:    new("[audio]\ndevice = \"hw\\u0007\"\n"),
 			wantKey: "audio.device",
@@ -199,5 +214,31 @@ func TestValidationErrorMessage(t *testing.T) {
 	err := &ValidationError{Key: "audio.mode", Reason: "bad"}
 	if got, want := err.Error(), "config: audio.mode: bad"; got != want {
 		t.Errorf("Error() = %q, want %q", got, want)
+	}
+}
+
+func TestParseALSAHW(t *testing.T) {
+	tests := []struct {
+		in   string
+		card string
+		dev  int
+		ok   bool
+	}{
+		{"alsa/hw:CARD=Vestri,DEV=0", "Vestri", 0, true},
+		{"alsa/hw:Vestri,1", "Vestri", 1, true},
+		{"alsa/hw:4,0", "4", 0, true},
+		{"alsa/hw:4", "4", 0, true},
+		{"alsa/plughw:CARD=Vestri,DEV=0", "", 0, false},
+		{"alsa/front:CARD=Vestri,DEV=0", "", 0, false},
+		{"pipewire/x", "", 0, false},
+		{"auto", "", 0, false},
+		{"alsa/hw:CARD=a b", "", 0, false},
+		{"alsa/hw:CARD=X,DEV=123", "", 0, false},
+	}
+	for _, tt := range tests {
+		card, dev, ok := ParseALSAHW(tt.in)
+		if card != tt.card || dev != tt.dev || ok != tt.ok {
+			t.Errorf("ParseALSAHW(%q) = %q %d %v", tt.in, card, dev, ok)
+		}
 	}
 }

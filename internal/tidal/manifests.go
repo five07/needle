@@ -90,6 +90,10 @@ type Manifest struct {
 	AlbumNormalization *Normalization
 	// SampleRate is the highest audioSamplingRate in the MPD, or 0.
 	SampleRate int
+	// BitDepth is the source bit depth from the Representation id (an
+	// undocumented "FORMAT,RATE,BITS" form, for example
+	// "FLAC_HIRES,192000,24"), or 0 when it cannot be read.
+	BitDepth int
 	// Duration is the MPD's presentation duration, or 0 if absent.
 	Duration  time.Duration
 	FetchedAt time.Time
@@ -189,6 +193,7 @@ func (c *Client) TrackManifest(ctx context.Context, trackID string, formats []Fo
 		TrackNormalization: attrs.TrackNorm.value(),
 		AlbumNormalization: attrs.AlbumNorm.value(),
 		SampleRate:         info.sampleRate,
+		BitDepth:           info.bitDepth,
 		Duration:           info.duration,
 		FetchedAt:          fetched,
 		ExpiresAt:          fetched.Add(fallbackValidity),
@@ -262,6 +267,7 @@ func decodeDataURI(uri string) ([]byte, error) {
 type mpdInfo struct {
 	protected   bool
 	sampleRate  int
+	bitDepth    int
 	duration    time.Duration
 	segmentURLs []string
 }
@@ -275,6 +281,7 @@ type mpdXML struct {
 			ContentProtection []struct{}   `xml:"ContentProtection"`
 			SegmentTemplate   *segmentsXML `xml:"SegmentTemplate"`
 			Representations   []struct {
+				ID                string       `xml:"id,attr"`
 				AudioSamplingRate string       `xml:"audioSamplingRate,attr"`
 				ContentProtection []struct{}   `xml:"ContentProtection"`
 				SegmentTemplate   *segmentsXML `xml:"SegmentTemplate"`
@@ -311,6 +318,7 @@ func inspectMPD(b []byte) (mpdInfo, error) {
 				info.segmentURLs = append(info.segmentURLs, rep.SegmentTemplate.urls()...)
 				if sr, err := strconv.Atoi(rep.AudioSamplingRate); err == nil && sr > info.sampleRate {
 					info.sampleRate = sr
+					info.bitDepth = idBitDepth(rep.ID)
 				}
 			}
 		}
@@ -409,4 +417,18 @@ func parseISODuration(s string) (time.Duration, error) {
 		rest = rest[i+1:]
 	}
 	return d, nil
+}
+
+// idBitDepth reads BITS from a "FORMAT,RATE,BITS" Representation id.
+func idBitDepth(id string) int {
+	parts := strings.Split(id, ",")
+	if len(parts) != 3 {
+		return 0
+	}
+	switch bits, err := strconv.Atoi(parts[2]); {
+	case err != nil, bits != 16 && bits != 24 && bits != 32:
+		return 0
+	default:
+		return bits
+	}
 }

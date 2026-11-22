@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
@@ -147,10 +148,35 @@ func (c Config) Validate() error {
 	if strings.ContainsFunc(c.Audio.Device, isControl) {
 		return &ValidationError{Key: "audio.device", Reason: "contains control characters"}
 	}
+	if c.Audio.Mode == AudioExclusive {
+		if _, _, ok := ParseALSAHW(c.Audio.Device); !ok {
+			return &ValidationError{Key: "audio.device", Reason: fmt.Sprintf(
+				`exclusive mode needs an ALSA hardware device such as "alsa/hw:CARD=Name,DEV=0", not %q (run tidal-tui -list-devices)`,
+				c.Audio.Device)}
+		}
+	}
 	if c.Auth.ClientID != "" && !clientIDPattern.MatchString(c.Auth.ClientID) {
 		return &ValidationError{Key: "auth.client_id", Reason: "must be 1-128 letters, digits, '.', '_' or '-'"}
 	}
 	return nil
+}
+
+// alsaHWPattern matches mpv ALSA hw device names: alsa/hw:CARD=Name,DEV=0,
+// alsa/hw:Name,0, alsa/hw:4,0, or alsa/hw:4.
+var alsaHWPattern = regexp.MustCompile(`^alsa/hw:(?:CARD=)?([A-Za-z0-9_-]{1,64})(?:,(?:DEV=)?([0-9]{1,2}))?$`)
+
+// ParseALSAHW extracts the card (number or id) and device number from an
+// mpv ALSA hw device name. Exclusive mode requires such a device (PLAN.md
+// decision 19): "auto" or a plughw/front device could convert the format.
+func ParseALSAHW(device string) (card string, dev int, ok bool) {
+	m := alsaHWPattern.FindStringSubmatch(device)
+	if m == nil {
+		return "", 0, false
+	}
+	if m[2] != "" {
+		dev, _ = strconv.Atoi(m[2])
+	}
+	return m[1], dev, true
 }
 
 func isControl(r rune) bool { return r < 0x20 || r == 0x7f }

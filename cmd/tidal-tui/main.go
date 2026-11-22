@@ -16,6 +16,7 @@ import (
 	"github.com/five07/tidal-tui/internal/auth"
 	"github.com/five07/tidal-tui/internal/config"
 	"github.com/five07/tidal-tui/internal/logging"
+	"github.com/five07/tidal-tui/internal/player"
 	"github.com/five07/tidal-tui/internal/tidal"
 	"github.com/five07/tidal-tui/internal/xdg"
 )
@@ -30,9 +31,16 @@ type deps struct {
 	newOAuth   func(clientID string) *auth.OAuth
 	login      func(ctx context.Context, o *auth.OAuth, out io.Writer) (auth.Tokens, error)
 	apiOptions []tidal.Option
+	// asoundRoot is the procfs ALSA directory ("" means /proc/asound).
+	asoundRoot string
+	// mpvDeviceHelp returns `mpv --audio-device=help` output.
+	mpvDeviceHelp func(ctx context.Context) ([]byte, error)
 }
 
 var defaultDeps = deps{
+	mpvDeviceHelp: func(ctx context.Context) ([]byte, error) {
+		return player.MPVDeviceHelp(ctx, "")
+	},
 	newOAuth: auth.NewOAuth,
 	login: func(ctx context.Context, o *auth.OAuth, out io.Writer) (auth.Tokens, error) {
 		return o.Login(ctx, out)
@@ -56,6 +64,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	logout := fs.Bool("logout", false, "remove stored TIDAL credentials and exit")
+	listDevices := fs.Bool("list-devices", false, "list audio devices for audio.device and exit")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), "Usage: tidal-tui [flags]")
 		fmt.Fprintln(fs.Output())
@@ -76,6 +85,10 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	if *showVersion {
 		fmt.Fprintf(stdout, "tidal-tui %s\n", version)
 		return 0
+	}
+
+	if *listDevices {
+		return printDevices(ctx, d, stdout, stderr)
 	}
 
 	dirs, err := xdg.Resolve(getenv)
@@ -179,4 +192,20 @@ func account(ctx context.Context, d deps, oauth *auth.OAuth, store auth.Store, t
 		user, err = client.Me(ctx)
 	}
 	return user, err
+}
+
+// printDevices lists exclusive (ALSA hw) and shared (PipeWire) devices.
+func printDevices(ctx context.Context, d deps, stdout, stderr io.Writer) int {
+	exclusive, err := player.ExclusiveDevices(d.asoundRoot)
+	if err != nil {
+		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		return 1
+	}
+	var shared []player.Device
+	help, sharedErr := d.mpvDeviceHelp(ctx)
+	if sharedErr == nil {
+		shared = player.SharedDevices(help)
+	}
+	player.WriteDeviceList(stdout, exclusive, shared, sharedErr)
+	return 0
 }

@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, and stream selection are in place; the UI and player are not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, and the audio engine are in place; the UI is not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -14,7 +14,8 @@ The TIDAL developer access tier this project currently has serves **30-second pr
 
 - **Linux** (v1 targets Linux only)
 - **Go 1.27** or later to build
-- **[mpv](https://mpv.io)** at runtime, used as the audio engine
+- **[mpv](https://mpv.io)** 0.38 or later at runtime, used as the audio engine
+- **PipeWire** for shared mode (`pw-dump` is used to check the output format)
 - A TIDAL subscription
 
 ## Build and run
@@ -66,6 +67,47 @@ The format TIDAL actually delivers is reported to the player. Dolby Atmos is nev
 - **Playing on another device** with the same account blocks playback here. tidal-tui tells you to stop it there first.
 - TIDAL's signed stream URLs expire after an hour. tidal-tui fetches a fresh stream when the current one would expire before the track ends, and prefetches the next track in the queue for gapless playback.
 
+## Audio output
+
+tidal-tui plays through mpv, run as a private subprocess controlled over a JSON IPC socket in `$XDG_RUNTIME_DIR/tidal-tui/` (mode `0700`). Stream manifests are written there with mode `0600` and deleted after use, so signed URLs never appear on a command line. mpv runs with `--no-config`, so your own mpv settings cannot change the output.
+
+There are two output modes, set with `audio.mode`:
+
+- **`shared`** (default) plays through PipeWire, alongside other apps. PipeWire switches the device to the track's sample rate when nothing else is playing; if another app holds the device at a different rate, PipeWire resamples.
+- **`exclusive`** opens an ALSA hardware device directly, so samples reach the DAC unchanged. Other apps cannot use the device while tidal-tui plays, and if another app is already using it, playback stops with an error instead of quietly falling back to shared mode. Exclusive mode needs an explicit device (`auto` is rejected at startup).
+
+To see the device names for `audio.device`:
+
+```sh
+./tidal-tui -list-devices
+```
+
+Exclusive mode needs an `alsa/hw:CARD=<name>,DEV=<n>` device from the first list. Devices that are not USB are flagged as built-in: on some laptops (for example Apple Silicon Macs running Asahi Linux) the built-in device drives the speakers without any protection, so do not use it in exclusive mode. Shared mode takes `auto` or a `pipewire/<sink>` name from the second list.
+
+### Bit-perfect indicator
+
+tidal-tui compares the source format with what the sound card is actually running, read from `/proc/asound`, not just what mpv reports. The indicator has three states:
+
+| State | Meaning |
+|---|---|
+| bit-perfect | Exclusive mode, lossless source, and the card runs at the source sample rate with enough bit depth (24-bit audio carried in a 32-bit format counts). |
+| rate matched | Shared mode at the source rate, or a lossy (AAC) source. PipeWire may still mix or convert, so this is not claimed as bit-perfect. |
+| altered | Resampled, software volume below 100%, audio filters active, bit depth reduced, or the output format cannot be verified (for example a PipeWire filter sink with no ALSA card behind it). |
+
+The source bit depth comes from TIDAL's stream description. When it is missing, the indicator requires 24-bit output before claiming bit-perfect.
+
+### Volume
+
+In exclusive mode software volume is disabled: set the volume on your DAC or amplifier. Any software volume change would alter the samples. In shared mode software volume is available, and the indicator shows "altered" whenever it is below 100%.
+
+### Gapless playback
+
+The next track in the queue is fetched about 45 seconds before the current one ends and handed to mpv in advance. Consecutive tracks with the same format play without a gap. When the format changes (for example 44.1 kHz to 96 kHz), the device is reopened at the new rate, which leaves a short gap; tidal-tui never resamples to avoid it. Repeat-one replays the track without preloading.
+
+### Errors
+
+A missing mpv, a busy device, an output that cannot be opened, or an mpv crash stops playback with a message instead of hanging. If a stream breaks mid-track (usually because its signed links expired), tidal-tui fetches a fresh stream once and resumes from the same position.
+
 ## Configuration
 
 tidal-tui reads `$XDG_CONFIG_HOME/tidal-tui/config.toml` (default `~/.config/tidal-tui/config.toml`). The file is optional and every key has a default:
@@ -78,7 +120,8 @@ quality = "hires"
 # "shared" plays through PipeWire. "exclusive" opens the device directly
 # for bit-perfect output, blocking other apps while playing.
 mode = "shared"
-# mpv audio device name, or "auto" for the system default.
+# mpv audio device name (see tidal-tui -list-devices). Shared mode: "auto"
+# or "pipewire/<sink>". Exclusive mode: "alsa/hw:CARD=<name>,DEV=<n>".
 device = "auto"
 
 [auth]

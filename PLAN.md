@@ -120,6 +120,40 @@ API facts behind these questions are in backlog doc `doc-001` (TIDAL API third-p
     - c) GPL-3.0, with the same module path.
     > MS: a
 
+### TASK-008 (audio engine)
+
+Background for these questions is in backlog doc `doc-003` (audio spike with the Schiit Vestri).
+
+16. **What "bit-perfect" means in shared mode.** In the spike, PipeWire switched the DAC to the source rate when it was idle, but resampled to 48 kHz when another app was already playing, and mpv could not see that. tidal-tui can read the real hardware rate from the card in both modes. PipeWire still mixes in floating point, so shared output cannot be proven bit-perfect.
+    - a) **(Recommended)** Three states. "Bit-perfect" only in exclusive mode, when the hardware rate equals the source rate, the format is lossless, there are no filters, and software volume is 100%. "Rate matched" in shared mode when the hardware rate equals the source rate. "Resampled" whenever the rates differ or the output rate is unknown.
+    - b) Two states. Shared mode counts as bit-perfect when the rates match and volume is 100%.
+    - c) Two states. Shared mode is never bit-perfect, with no "rate matched" state.
+    > MS: a
+
+17. **Exclusive mode when the DAC is busy.** If another app is playing through PipeWire, mpv fails to open the `hw:` device ("Device or resource busy").
+    - a) **(Recommended)** Show a clear error ("the DAC is in use by another app; stop it or switch to shared mode") and do not play. Never fall back to shared output silently, because the user asked for exclusive.
+    - b) Fall back to shared mode automatically, with the indicator off and a notice.
+    - c) Ask PipeWire to release the device through the D-Bus `org.freedesktop.ReserveDevice1` handshake, then open it. This makes `github.com/godbus/dbus/v5` (already an indirect dependency via go-keyring) a direct dependency.
+    > MS: a
+
+18. **Source bit depth.** mpv reports 24-bit FLAC as `s32` (its container), not 24. TIDAL does not document bit depth anywhere.
+    - a) **(Recommended)** Read it from the manifest's representation id (observed as `FLAC_HIRES,192000,24`). If it doesn't parse, show the sample rate with no bit depth. No extra requests.
+    - b) Read the FLAC header from the stream's initialization segment. This is reliable but costs an extra signed request per track and an MP4 box parser.
+    - c) Don't show bit depth; show codec and sample rate only.
+    > MS: a
+
+19. **Choosing the exclusive-mode device.** `audio.device = "auto"` has no safe meaning in exclusive mode. On this MacBook, the first ALSA playback device is the raw speaker path, which skips the speaker-safety processing.
+    - a) **(Recommended)** Exclusive mode requires an explicit ALSA device (for example `alsa/hw:CARD=Vestri,DEV=0`); `auto` with exclusive is a config error that names the key. Add `tidal-tui -list-devices` to print the available output devices.
+    - b) Pick the first USB audio device automatically, and error if there is none.
+    - c) Same as (a), without `-list-devices` (users run `mpv --audio-device=help` instead).
+    > MS: a
+
+20. **Software volume.** Any software volume below 100% changes the samples.
+    - a) **(Recommended)** Exclusive mode disables software volume: volume keys do nothing, and the UI shows that volume is set on the DAC or amp. Shared mode allows volume, and the indicator shows "rate matched" only at 100%.
+    - b) Allow volume in both modes, and turn the indicator off below 100%.
+    - c) No software volume in either mode for v1.
+    > MS: a, but tag a post-MVP that allow the user to choose "volume on your output device" or "allow this computer volume to also control volume" - something like that
+
 ## DECISIONS
 
 These are the answers to the questions above. Backlog tasks are written to match them.
@@ -141,6 +175,11 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 13 | Gapless | Best effort: prefetch the next manifest and use mpv gapless. |
 | 14 | DoD | Adapted copy below, mirrored into backlog's project Definition of Done. |
 | 15 | License | MIT, `github.com/five07/tidal-tui`. |
+| 16 | Bit-perfect indicator | Three states: "bit-perfect" (exclusive only: hardware rate equals source, lossless format, no filters, volume 100%), "rate matched" (shared mode at the source rate), "resampled" (rates differ or output rate unknown). |
+| 17 | Busy DAC in exclusive mode | Clear error, no playback, no silent fallback to shared. |
+| 18 | Source bit depth | From the manifest representation id (`FLAC_HIRES,192000,24`); show the sample rate alone if it doesn't parse. |
+| 19 | Exclusive device | Must be an explicit ALSA device; `auto` with exclusive is a config error. Add `tidal-tui -list-devices`. |
+| 20 | Software volume | Disabled in exclusive mode (UI says volume is on the DAC/amp); allowed in shared mode, "rate matched" only at 100%. A post-MVP setting to choose device or software volume is TASK-018. |
 
 ## Definition of Done
 
@@ -154,3 +193,11 @@ This is adapted from the CLAUDE.md template (Q14) and applies to every ticket. C
 - [ ] The README is updated wherever behavior, configuration, keybindings, or tradeoffs changed.
 - [ ] New dependencies are limited to those named in the ticket (for example the Charm v2 stack or a keyring library). No changes outside the ticket's scope.
 - [ ] Logging uses `log/slog` to a file under `$XDG_STATE_HOME/tidal-tui/`, with `track_id` and `request_id` as structured fields where relevant. Logs never include tokens.
+
+
+## New Items
+
+1. Add a feature that if the audio volume is changed from the keyboard or the prev/pause/next buttons are used a small notification shows on the bottom of the viewport. This functionality exists in `cliamp` and I'd like to adopt it. If screenshots are needed, let me know.
+2. For the playback scrubbing, we could use the left/right arrow keys to jump, 5/10/30 seconds depending on the frequency they are pressed. We can discuss at planning.
+3. Add a post-MVP ticket to add an option to toggle a visualizer.
+4. Post-MVP, Add EQ and presets

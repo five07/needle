@@ -120,6 +120,9 @@ func TestTrackManifestSuccess(t *testing.T) {
 	if m.TrackID != "330930030" || m.Hash != "h1" || string(m.MPD) != mpd {
 		t.Errorf("identity fields wrong: %s hash=%s", m.TrackID, m.Hash)
 	}
+	if m.BitDepth != 24 {
+		t.Errorf("bit depth = %d, want 24 from the representation id", m.BitDepth)
+	}
 	if m.SampleRate != 192000 || m.Duration != 29994*time.Millisecond {
 		t.Errorf("sample rate %d duration %s", m.SampleRate, m.Duration)
 	}
@@ -394,6 +397,17 @@ func TestNumericID(t *testing.T) {
 	for in, want := range map[string]bool{"1": true, "330930030": true, "": false, "12a": false, "-1": false, strings.Repeat("9", 21): false} {
 		if numericID(in) != want {
 			t.Errorf("numericID(%q) = %v", in, !want)
+		}
+	}
+}
+
+func TestIDBitDepth(t *testing.T) {
+	for in, want := range map[string]int{
+		"FLAC_HIRES,192000,24": 24, "FLAC,44100,16": 16, "X,1,32": 32,
+		"FLAC,44100": 0, "FLAC,44100,abc": 0, "FLAC,44100,12": 0, "": 0, "a,b,c,d": 0,
+	} {
+		if got := idBitDepth(in); got != want {
+			t.Errorf("idBitDepth(%q) = %d, want %d", in, got, want)
 		}
 	}
 }
