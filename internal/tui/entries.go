@@ -87,7 +87,7 @@ func (e *entryList) add(entries ...entry) {
 func (e *entryList) relayout(width int) {
 	rows := make([]string, len(e.entries))
 	for i, en := range e.entries {
-		rows[i] = rowText(en, width)
+		rows[i] = rowText(en, width, e.isFavorite(en))
 	}
 	e.heading = func(i int) bool { return i < len(e.entries) && e.entries[i].kind == entryHeading }
 	e.SetRows(rows)
@@ -146,6 +146,12 @@ func (e *entryList) update(msg tea.Msg) (cmd tea.Cmd, handled bool) {
 			return e.queue(false), true
 		case key.Matches(msg, Keys.PlayNext):
 			return e.queue(true), true
+		case key.Matches(msg, Keys.Favorite), key.Matches(msg, Keys.Unfavorite):
+			if en, ok := e.selected(); ok && e.svc != nil {
+				return e.svc.favoriteCmd(en, key.Matches(msg, Keys.Favorite)), true
+			}
+		case key.Matches(msg, Keys.AddToPlaylist):
+			return e.addToPlaylist(), true
 		default:
 			return nil, false
 		}
@@ -246,16 +252,42 @@ func (e *entryList) queue(next bool) tea.Cmd {
 	return nil
 }
 
-// bindings are the item keys, for the hint line and help.
-func (e *entryList) bindings() []key.Binding {
+// bindings are the item keys, most used first, for the hint line and
+// help. Group keys are left out when groups is false.
+func (e *entryList) bindings(groups bool) []key.Binding {
 	if len(e.entries) == 0 {
 		return nil
 	}
-	return []key.Binding{
+	bs := []key.Binding{
 		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "play/open")),
-		Keys.QueueAdd, Keys.PlayNext, Keys.NextGroup, Keys.PrevGroup,
+		Keys.QueueAdd, Keys.PlayNext, Keys.Favorite, Keys.Unfavorite, Keys.AddToPlaylist,
 	}
+	if groups {
+		bs = append(bs, Keys.NextGroup, Keys.PrevGroup)
+	}
+	return bs
 }
+
+func (e *entryList) isFavorite(en entry) bool {
+	c, id, _, ok := favRef(en)
+	return ok && e.svc != nil && e.svc.favs().is(c, id)
+}
+
+// addToPlaylist opens the playlist picker for the selected track.
+func (e *entryList) addToPlaylist() tea.Cmd {
+	en, ok := e.selected()
+	if !ok || e.svc == nil || e.svc.Library == nil {
+		return nil
+	}
+	if en.kind != entryTrack {
+		return Notify("Only tracks can be added to a playlist.")
+	}
+	return Push(NewPlaylistPicker(e.svc, en.track))
+}
+
+// favoritesChanged redraws the rows on the next render, so favorite
+// markers follow the change.
+func (e *entryList) favoritesChanged() { e.width = 0 }
 
 // Row layout.
 
@@ -309,8 +341,15 @@ func columns(width int, cells ...cell) string {
 
 const indent = "  "
 
-func rowText(en entry, width int) string {
+// favMark replaces the indent on rows known to be favorites.
+const favMark = "♥ "
+
+func rowText(en entry, width int, fav bool) string {
 	w := max(width-len(indent), 1)
+	indent := indent
+	if fav {
+		indent = favMark
+	}
 	switch en.kind {
 	case entryHeading:
 		return strings.ToUpper(en.heading)

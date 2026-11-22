@@ -530,7 +530,7 @@ func TestResultNavigation(t *testing.T) {
 	for _, b := range s.Bindings() {
 		keys = append(keys, b.Help().Key)
 	}
-	if strings.Join(keys, " ") != "enter a A tab shift+tab" {
+	if strings.Join(keys, " ") != "enter a A f F + tab shift+tab" {
 		t.Errorf("bindings = %v", keys)
 	}
 }
@@ -677,7 +677,7 @@ func TestActionsWithoutPlayback(t *testing.T) {
 	}
 	// An empty list has no actions or item bindings.
 	var l entryList
-	if l.activate() != nil || l.queue(true) != nil || l.bindings() != nil {
+	if l.activate() != nil || l.queue(true) != nil || l.bindings(true) != nil {
 		t.Error("empty list acted")
 	}
 	l.jumpGroup(1)
@@ -726,7 +726,7 @@ func TestAlbumView(t *testing.T) {
 	if v.list.Cursor() != 1 {
 		t.Errorf("click cursor = %d", v.list.Cursor())
 	}
-	if v.Title() != "Discovery" || v.Capturing() || len(v.Bindings()) != 5 {
+	if v.Title() != "Discovery" || v.Capturing() || len(v.Bindings()) != 6 {
 		t.Error("view metadata")
 	}
 	// h goes back to the results.
@@ -824,7 +824,7 @@ func TestArtistView(t *testing.T) {
 	if en, _ := v.list.selected(); en.track.ID != "1" {
 		t.Errorf("click selected %s", describe(en))
 	}
-	if v.Title() != "Daft Punk" || v.Capturing() || len(v.Bindings()) != 5 {
+	if v.Title() != "Daft Punk" || v.Capturing() || len(v.Bindings()) != 8 {
 		t.Error("view metadata")
 	}
 }
@@ -972,7 +972,7 @@ func TestRowLayout(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := rowText(tt.en, tt.width)
+			got := rowText(tt.en, tt.width, false)
 			if got != tt.want {
 				t.Errorf("rowText() = %q, want %q", got, tt.want)
 			}

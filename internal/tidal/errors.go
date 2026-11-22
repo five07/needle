@@ -30,6 +30,14 @@ var (
 	ErrClientNotEntitled = errors.New("tidal: client cannot access this content")
 	// ErrPrerequisiteMissing means playback prerequisites are missing.
 	ErrPrerequisiteMissing = errors.New("tidal: required playback prerequisites are missing")
+	// ErrDuplicateInPlaylist means the playlist already has the track.
+	ErrDuplicateInPlaylist = errors.New("tidal: playlist already contains the item")
+	// ErrPlaylistFull means the playlist reached its item limit.
+	ErrPlaylistFull = errors.New("tidal: playlist is full")
+	// ErrAlreadyInCollection means the item is already a favorite.
+	ErrAlreadyInCollection = errors.New("tidal: collection already contains the item")
+	// ErrCollectionFull means the collection reached its item limit.
+	ErrCollectionFull = errors.New("tidal: collection is full")
 )
 
 // codeSentinels maps JSON:API error codes to sentinels.
@@ -40,6 +48,11 @@ var codeSentinels = map[string]error{
 	"CLIENT_NOT_ENTITLED":  ErrClientNotEntitled,
 	"PREREQUISITE_MISSING": ErrPrerequisiteMissing,
 	"INVALID_RESOURCE_ID":  ErrInvalidResourceID,
+
+	"DUPLICATE_ITEMS_IN_PLAYLIST":   ErrDuplicateInPlaylist,
+	"TOO_MANY_ITEMS_IN_PLAYLIST":    ErrPlaylistFull,
+	"DUPLICATE_ITEMS_IN_COLLECTION": ErrAlreadyInCollection,
+	"TOO_MANY_ITEMS_IN_COLLECTION":  ErrCollectionFull,
 }
 
 // maxDetail bounds how much server-provided text appears in error messages.

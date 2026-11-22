@@ -46,6 +46,9 @@ func startFake(t *testing.T, mode string, mutate ...func(*MPVConfig)) (*MPV, fak
 	t.Setenv("FAKE_MPV", "1")
 	t.Setenv("FAKE_MPV_MODE", mode)
 	t.Setenv("FAKE_MPV_LOG", env.log)
+	// A -race build sleeps 1 s at exit by default; the fake mpv must quit
+	// promptly like the real one, or Close would always kill it.
+	t.Setenv("GORACE", "atexit_sleep_ms=0")
 	cfg := MPVConfig{
 		Binary:       os.Args[0],
 		Mode:         config.AudioShared,

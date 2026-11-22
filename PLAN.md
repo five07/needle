@@ -213,6 +213,77 @@ Layout and keymap follow `UI.md`. These are only the points where `UI.md` is sil
     - b) Show 5 per group with a "more ..." row that expands the group in place and pages further on demand.
     > MS: a
 
+### TASK-011 (library)
+
+API facts below come from the official OpenAPI spec v1.10.258 (the same version as doc-001).
+
+31. **Knowing what is already a favorite.** AC #5 wants favorite/unfavorite from search results too. The API has no "is this a favorite?" call: collection items can only be listed (20 per page) or searched with `filter[self][matchesQuery]`, which is INTERNAL tier.
+    - a) **(Recommended)** Two keys, no extra requests: `f` adds to favorites, `F` removes, in every view. A row shows `♥` when tidal-tui knows it is a favorite (the item is in a loaded Library list, or you favorited it this session). Removing in a Library view drops the row.
+    - b) One toggle key `f`. At startup tidal-tui loads the IDs of every favorite track, album, artist, and playlist in the background (one request per 20 items, so 100 requests for 2000 tracks), and `f` waits for that list before acting on an unknown item.
+    - c) One toggle key `f` that only knows items loaded in the Library this session. On anything else it adds.
+    > MS: a
+
+32. **What the Playlists tab lists.** TIDAL has two lists: playlists you own (`/playlists?filter[owners.id]=me`) and playlists in your collection (`/userCollectionPlaylists/me`, which per the spec can include folders). The probe below shows whether the collection already contains your own playlists.
+    - a) **(Recommended)** The Playlists tab shows your collection (owned and favorited, flat, no folders), newest first. "Add to playlist" offers only playlists you own, since only those can be edited.
+    - b) Two tabs: "My playlists" and "Favorite playlists".
+    > MS: a
+
+33. **Adding a track that is already in the playlist.** The API takes `onDuplicates` = `ADD`, `FAIL`, or `SKIP`.
+    - a) **(Recommended)** Use `FAIL`, and show "Already in <playlist>" without adding it. There is no "add anyway" in v1.
+    - b) Report the duplicate and offer `y` to add it anyway (a second request with `ADD`).
+    - c) Always add (`ADD`) and say nothing.
+    > MS: a
+
+34. **Library layout.** `UI.md` section 4 marks the tab layout as a guess.
+    - a) **(Recommended)** One Library section with sub-tabs across the top: Playlists, Albums, Tracks, Artists. `tab`/`shift+tab` switch tabs (there are no result groups here), and a click on a tab name selects it. Each tab loads on first visit.
+    - b) Separate sidebar entries for each list, which makes the sidebar longer and changes the `1`-`5` keys.
+    > MS: a
+
+35. **How far the filter reaches.** AC #3 says the filter narrows the loaded items. With 20 items per page, that can be a small part of a large library.
+    - a) **(Recommended)** While a filter is active, tidal-tui keeps loading the remaining pages in the background (up to 5000 items per tab, with a notice at the cap), so the filter covers the whole list. It matches title, artist, and album, ignoring case and accents.
+    - b) Filter only what has been loaded by scrolling.
+    > MS: a
+
+36. **Sort order.** AC #2 says sorted by date added "by default".
+    - a) **(Recommended)** Newest added first, plus an `o` key that cycles the server-side sort for the current tab (date added, then title, then artist name), reloading the list.
+    - b) Newest added first only, with no sort key in v1.
+    > MS: a
+
+### Rename to `needle`
+
+The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
+
+Scope (`tidal-tui` appears in about 50 files):
+
+- Go module path `github.com/five07/tidal-tui` becomes `github.com/five07/needle`, including every import.
+- `cmd/tidal-tui/` becomes `cmd/needle/`, the binary becomes `needle`, and `.gitignore` follows.
+- Runtime names: `$XDG_CONFIG_HOME/needle/`, `$XDG_STATE_HOME/needle/needle.log`, `$XDG_RUNTIME_DIR/needle/`, the `needle-` temp directory prefix, keyring service `needle`, and the login callback page text.
+- The TUI frame title, and with it every golden file under `internal/tui/testdata/`.
+- README, UI.md, the DoD in this file, and the backlog project name and Definition of Done.
+- Unchanged: `TIDAL_CLIENT_ID`, the `tidal` package, and the keyring account key `tidal-account`, since these describe the TIDAL service, not the product.
+
+These steps belong to you, because they are git or account actions:
+
+- Rename the GitHub repo to `five07/needle` (GitHub redirects the old URL) and update the `origin` remote.
+- Rename the app at developer.tidal.com if its display name says `tidal-tui`. The redirect URI `http://127.0.0.1:8765/callback` does not change.
+
+37. **Existing config, credentials, and logs.** After the rename, `needle` looks in new directories and a new keyring entry, so an existing login and config are not found.
+    - a) **(Recommended)** No migration. The project has no releases, so the README says nothing about it, and you run `tidal-tui -logout` once before switching, then move `config.toml` by hand if you have one.
+    - b) A one-time migration at startup: if `needle` finds no config or keyring entry but the old ones exist, it moves the config directory, copies the keyring entry to the new service and deletes the old one, and logs that it did so. Removed again after the first release.
+    > MS: a
+
+38. **When the rename lands.** TASK-011 (Library) is in progress with uncommitted changes, and the rename touches every package that TASK-011 also touches.
+    - a) **(Recommended)** As its own ticket right after TASK-011 is committed, before TASK-012 starts, so each diff stays reviewable.
+    - b) Now, before TASK-011 continues.
+    - c) After v1 is feature-complete.
+    > MS: c
+
+39. **Affiliation notice.** The README would describe `needle` as a client for TIDAL.
+    - a) **(Recommended)** Add one line under the README intro: "needle is an independent project and is not affiliated with or endorsed by TIDAL." Also print it in `-version` output.
+    - b) README line only.
+    - c) No notice.
+    > MS: a
+
 ## DECISIONS
 
 These are the answers to the questions above. Backlog tasks are written to match them.
@@ -249,6 +320,15 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 28 | Enter on a track | Queues the list it sits in, starting at that track (search Tracks group, or the loaded album/playlist list). |
 | 29 | Queue keys on collection rows | Album and playlist rows queue all their tracks (capped at 500, with a notice). Artist rows do nothing and hint to open the artist. |
 | 30 | Results per group | First page per group (up to 20) in one grouped list; `tab`/`shift+tab` jump between groups. No "more" expansion in v1. |
+| 31 | Favorite state | `f` adds to favorites, `F` removes, in every view; `♥` marks items known to be favorites (loaded in Library, or favorited this session). Removing in Library drops the row. No extra requests. |
+| 32 | Playlists tab | Shows the collection (owned and favorited, flat, no folders), newest first. "Add to playlist" offers only owned playlists. The probe confirmed the collection includes owned playlists. |
+| 33 | Duplicate in playlist | `onDuplicates=FAIL`; show "Already in <playlist>". No "add anyway" in v1. |
+| 34 | Library layout | One section with sub-tabs Playlists, Albums, Tracks, Artists; `tab`/`shift+tab` and clicks switch; each tab loads on first visit. |
+| 35 | Filter reach | While a filter is active, the remaining pages load in the background (up to 5000 items per tab, notice at the cap); matches title, artist, and album, ignoring case and accents. |
+| 36 | Sort | Newest added first; `o` cycles the server-side sort for the tab (date added, title, artist name where the tab has one) and reloads. |
+| 37 | Rename migration | None. Run `tidal-tui -logout` before switching and move `config.toml` by hand; the README says nothing about it. |
+| 38 | Rename timing | After v1 is feature-complete, as its own ticket. Until then the code, paths, and docs keep `tidal-tui`. |
+| 39 | Affiliation notice | One README line under the intro, "needle is an independent project and is not affiliated with or endorsed by TIDAL.", also printed by `-version`. |
 
 ## Definition of Done
 

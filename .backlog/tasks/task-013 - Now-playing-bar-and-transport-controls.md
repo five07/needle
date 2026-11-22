@@ -4,7 +4,7 @@ title: Now-playing bar and transport controls
 status: To Do
 assignee: []
 created_date: '2026-11-22T03:53:36Z'
-updated_date: '2026-11-22T05:37:59Z'
+updated_date: '2026-11-22T15:25:28Z'
 labels:
   - tui
   - player
@@ -37,6 +37,7 @@ Layout: check `UI.md` before implementing. Section 1 has the agreed screen mocku
 - [ ] #5 Transport controls in the bar are clickable with the mouse
 - [ ] #6 A queue view lists upcoming tracks and supports remove and clear
 - [ ] #7 Every line of the bar is centered, top to bottom: title (2 rows), artist and album, format info on its own line, progress, then controls (shuffle, previous/play-pause/next, repeat), as drawn in UI.md
+- [ ] #8 Pressing enter on the track that is currently playing toggles play/pause instead of restarting it; enter on any other track keeps the existing behavior
 <!-- AC:END -->
 
 ## Definition of Done

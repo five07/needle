@@ -59,7 +59,10 @@ func fakeMPVMain() {
 	if err != nil {
 		os.Exit(5)
 	}
-	f := &fakeMPV{conn: conn, mode: mode, logf: logf, trackLen: 150 * time.Millisecond}
+	f := &fakeMPV{conn: conn, mode: mode, logf: logf, trackLen: 150 * time.Millisecond, volume: 100}
+	if mode == "quiet" {
+		f.volume = 40
+	}
 	if ms := os.Getenv("FAKE_MPV_TRACK_MS"); ms != "" {
 		var n int
 		fmt.Sscan(ms, &n)
@@ -87,6 +90,8 @@ type fakeMPV struct {
 	gen      int // invalidates timers of replaced tracks
 	loads    int
 	starts   int
+	paused   bool
+	volume   float64
 }
 
 func (f *fakeMPV) send(v any) {
@@ -114,8 +119,10 @@ func (f *fakeMPV) serve() {
 		name, _ := req.Command[0].(string)
 		f.logf("cmd %s", sc.Text())
 		switch name {
-		case "observe_property", "request_log_messages", "set_property":
+		case "observe_property", "request_log_messages":
 			f.reply(req.RequestID, nil, "")
+		case "set_property":
+			f.setProperty(req.RequestID, req.Command)
 		case "get_property":
 			f.getProperty(req.RequestID, req.Command[1].(string))
 		case "loadfile":
@@ -138,7 +145,7 @@ func (f *fakeMPV) serve() {
 			}
 		case "quit":
 			f.reply(req.RequestID, nil, "")
-			if f.mode != "ignore-quit" {
+			if f.mode != "ignore-quit" && f.mode != "stall-fade" {
 				os.Exit(0)
 			}
 		default:
@@ -157,9 +164,33 @@ func (f *fakeMPV) getProperty(id any, prop string) {
 		f.reply(id, time.Since(f.started).Seconds()+12, "")
 	case prop == "duration" && f.current != nil:
 		f.reply(id, 29.994, "")
+	case prop == "core-idle":
+		f.reply(id, f.current == nil || f.paused, "")
+	case prop == "volume" && f.mode != "no-volume":
+		f.reply(id, f.volume, "")
 	default:
 		f.reply(id, nil, "property unavailable")
 	}
+}
+
+// setProperty records pause and volume. In modes "stall-fade" and
+// "stall-volume" volume changes are never answered; "stall-fade" also
+// ignores quit, like an mpv that hangs.
+func (f *fakeMPV) setProperty(id any, cmd []any) {
+	prop, _ := cmd[1].(string)
+	f.mu.Lock()
+	switch prop {
+	case "pause":
+		f.paused, _ = cmd[2].(bool)
+	case "volume":
+		if f.mode == "stall-fade" || f.mode == "stall-volume" {
+			f.mu.Unlock()
+			return
+		}
+		f.volume, _ = cmd[2].(float64)
+	}
+	f.mu.Unlock()
+	f.reply(id, nil, "")
 }
 
 func (f *fakeMPV) loadfile(id any, cmd []any) {

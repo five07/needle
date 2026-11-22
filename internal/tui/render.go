@@ -117,12 +117,27 @@ func (m *Model) hintLine(w int) string {
 		}
 	case m.focus == paneMain && m.current().Capturing():
 		hints = []key.Binding{hint("enter", "search"), hint("esc", "leave input"), hint("ctrl+c", "quit")}
+		if _, ok := m.current().(Filterer); ok {
+			hints = []key.Binding{hint("enter", "keep filter"), hint("esc", "clear filter"), hint("ctrl+c", "quit")}
+		}
 	case m.focus == paneSidebar:
 		hints = []key.Binding{hint("j/k", "move"), hint("enter", "open"), hint("/", "search"), hint("?", "help"), hint("q", "quit")}
+		if _, ok := m.current().(Filterer); ok { // the filter matters most: first
+			hints = []key.Binding{hint("/", "filter"), hint("j/k", "move"), hint("enter", "open"), hint("?", "help"), hint("q", "quit")}
+		}
 	default:
+		vb := m.current().Bindings()
+		lead := 0
+		if l, ok := m.current().(HintLeader); ok {
+			lead = min(max(l.LeadHints(), 0), len(vb))
+		}
+		hints = append(hints, vb[:lead]...)
 		hints = append(hints, hint("j/k", "move"), hint("h", "back"))
-		hints = append(hints, m.current().Bindings()...)
-		hints = append(hints, hint("/", "search"), hint("?", "help"), hint("q", "quit"))
+		hints = append(hints, vb[lead:]...)
+		if _, ok := m.current().(Filterer); !ok { // a Filterer lists "/ filter" itself
+			hints = append(hints, hint("/", "search"))
+		}
+		hints = append(hints, hint("?", "help"), hint("q", "quit"))
 	}
 	// Whole hints only: the ones that do not fit are left out (the help
 	// overlay lists them all).

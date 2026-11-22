@@ -214,7 +214,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	go watchStatus(uiCtx, p, notices)
 
 	model = tui.New(tui.Config{
-		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Playback: &playback{q: q, p: p}, Logger: logger},
+		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Playback: &playback{q: q, p: p}, Logger: logger},
 		Notices:  notices,
 	})
 	return model, func() { cancel(); <-done }, nil

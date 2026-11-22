@@ -167,7 +167,13 @@ func (v *TrackListView) more() tea.Cmd {
 }
 
 // Bindings implements View.
-func (v *TrackListView) Bindings() []key.Binding { return v.list.bindings() }
+func (v *TrackListView) Bindings() []key.Binding { return v.list.bindings(false) }
+
+// FavoriteChanged implements favoriteWatcher.
+func (v *TrackListView) FavoriteChanged(FavoriteMsg) tea.Cmd {
+	v.list.favoritesChanged()
+	return nil
+}
 
 // Capturing implements View.
 func (v *TrackListView) Capturing() bool { return false }
@@ -301,7 +307,13 @@ func (v *ArtistView) more() tea.Cmd {
 }
 
 // Bindings implements View.
-func (v *ArtistView) Bindings() []key.Binding { return v.list.bindings() }
+func (v *ArtistView) Bindings() []key.Binding { return v.list.bindings(true) }
+
+// FavoriteChanged implements favoriteWatcher.
+func (v *ArtistView) FavoriteChanged(FavoriteMsg) tea.Cmd {
+	v.list.favoritesChanged()
+	return nil
+}
 
 // Capturing implements View.
 func (v *ArtistView) Capturing() bool { return false }

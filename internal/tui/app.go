@@ -78,13 +78,18 @@ type Model struct {
 	last     click
 	now      func() time.Time
 	notices  <-chan string
+	svc      *Services
+	opened   map[View]bool // views whose Open has run
 }
 
 // New returns the shell with the given section views.
 func New(cfg Config) *Model {
-	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices}
+	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices, svc: cfg.Services, opened: map[View]bool{}}
 	if m.now == nil {
 		m.now = time.Now
+	}
+	if cfg.Library == nil && cfg.Services != nil && cfg.Services.Library != nil {
+		cfg.Library = NewLibraryView(cfg.Services)
 	}
 	roots := [sectionCount]View{cfg.Search, cfg.Library, cfg.Discovery, cfg.Queue, cfg.Account}
 	names := [sectionCount]string{"Search", "Library", "Discovery", "Queue", "Account"}
@@ -135,11 +140,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.layout = ComputeLayout(msg.Width, msg.Height)
 	case tea.KeyPressMsg:
-		return m, m.onKey(msg)
+		return m, m.withOpen(m.onKey(msg))
 	case tea.MouseClickMsg:
-		return m, m.onClick(msg.Mouse())
+		return m, m.withOpen(m.onClick(msg.Mouse()))
 	case tea.MouseWheelMsg:
-		return m, m.onWheel(msg.Mouse())
+		return m, m.withOpen(m.onWheel(msg.Mouse()))
 	case NoticeMsg:
 		m.noticeID++
 		m.notice = Sanitize(msg.Text)
@@ -153,10 +158,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.View != nil {
 			m.stacks[m.section] = append(m.stacks[m.section], msg.View)
 			m.focus = paneMain
-			if o, ok := msg.View.(Opener); ok {
-				return m, o.Open()
-			}
+			return m, m.openCurrent()
 		}
+	case FavoriteMsg:
+		return m, m.favoriteChanged(msg)
 	case ForViewMsg:
 		for _, stack := range m.stacks {
 			for _, v := range stack {
@@ -169,6 +174,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(Notify(msg.text), m.listen())
 	case PopMsg:
 		m.pop()
+	case CloseMsg:
+		for i, stack := range m.stacks {
+			if len(stack) > 1 && stack[len(stack)-1] == msg.View {
+				delete(m.opened, msg.View)
+				m.stacks[i] = stack[:len(stack)-1]
+			}
+		}
 	default:
 		// Messages from view commands (input cursor blink, results).
 		return m, m.current().Update(msg)
@@ -181,6 +193,7 @@ func (m *Model) pop() bool {
 	if len(s) <= 1 {
 		return false
 	}
+	delete(m.opened, s[len(s)-1])
 	m.stacks[m.section] = s[:len(s)-1]
 	return true
 }
@@ -218,6 +231,10 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 		m.help, m.helpTop = true, 0
 		return nil
 	case key.Matches(k, Keys.Search):
+		if f, ok := m.current().(Filterer); ok {
+			m.focus = paneMain
+			return f.StartFilter()
+		}
 		m.section = SectionSearch
 		m.stacks[SectionSearch] = m.stacks[SectionSearch][:1]
 		m.focus = paneMain
@@ -248,7 +265,9 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	case key.Matches(k, Keys.Back):
-		m.pop()
+		if !m.pop() {
+			return m.current().Update(k) // at the root: the view may use esc (clear a filter)
+		}
 		return nil
 	}
 	return m.current().Update(k)
@@ -315,4 +334,45 @@ func (m *Model) View() tea.View {
 	v.MouseMode = tea.MouseModeCellMotion
 	v.WindowTitle = "tidal-tui"
 	return v
+}
+
+// withOpen adds the Open command of the current view when it has not run
+// yet, so a section's root view loads the first time it is shown.
+func (m *Model) withOpen(cmd tea.Cmd) tea.Cmd {
+	if open := m.openCurrent(); open != nil {
+		return tea.Batch(cmd, open)
+	}
+	return cmd
+}
+
+// openCurrent runs Open once for the current view, if it is an Opener.
+func (m *Model) openCurrent() tea.Cmd {
+	v := m.current()
+	o, ok := v.(Opener)
+	if !ok || m.opened[v] {
+		return nil
+	}
+	m.opened[v] = true
+	return o.Open()
+}
+
+// favoriteChanged records a finished favorite change, tells every open
+// view (so markers and Library lists update), and confirms it.
+func (m *Model) favoriteChanged(msg FavoriteMsg) tea.Cmd {
+	if m.svc != nil {
+		m.svc.favs().set(msg.Collection, msg.ID, msg.Added)
+	}
+	cmds := []tea.Cmd{}
+	for _, stack := range m.stacks {
+		for _, v := range stack {
+			if w, ok := v.(favoriteWatcher); ok {
+				cmds = append(cmds, w.FavoriteChanged(msg))
+			}
+		}
+	}
+	text := "Removed from favorites: " + msg.Name
+	if msg.Added {
+		text = "Added to favorites: " + msg.Name
+	}
+	return tea.Batch(append(cmds, Notify(text))...)
 }

@@ -147,7 +147,7 @@ func (k *Catalog) AlbumTracks(ctx context.Context, albumID, next string) (Page[T
 	if !numericID(albumID) {
 		return Page[Track]{}, fmt.Errorf("%w: album %q", ErrInvalidResourceID, truncate(albumID, 40))
 	}
-	return listPage(ctx, k, "/albums/"+albumID+"/relationships/items", "items.artists,items.albums", next, "tracks", trackFrom)
+	return listPage(ctx, k, "/albums/"+albumID+"/relationships/items", k.catalogQuery("items.artists,items.albums"), next, linked("tracks", trackFrom))
 }
 
 // PlaylistTracks returns a page of a playlist's tracks in playlist order.
@@ -156,7 +156,7 @@ func (k *Catalog) PlaylistTracks(ctx context.Context, playlistID, next string) (
 	if !playlistIDOK(playlistID) {
 		return Page[Track]{}, fmt.Errorf("%w: playlist %q", ErrInvalidResourceID, truncate(playlistID, 40))
 	}
-	return listPage(ctx, k, "/playlists/"+playlistID+"/relationships/items", "items.artists,items.albums", next, "tracks", trackFrom)
+	return listPage(ctx, k, "/playlists/"+playlistID+"/relationships/items", k.catalogQuery("items.artists,items.albums"), next, linked("tracks", trackFrom))
 }
 
 // ArtistTracks returns a page of an artist's top tracks, with duplicate
@@ -165,7 +165,7 @@ func (k *Catalog) ArtistTracks(ctx context.Context, artistID, next string) (Page
 	if !numericID(artistID) {
 		return Page[Track]{}, fmt.Errorf("%w: artist %q", ErrInvalidResourceID, truncate(artistID, 40))
 	}
-	return listPage(ctx, k, "/artists/"+artistID+"/relationships/tracks", "tracks.artists,tracks.albums", next, "tracks", trackFrom, "collapseBy", "FINGERPRINT")
+	return listPage(ctx, k, "/artists/"+artistID+"/relationships/tracks", k.catalogQuery("tracks.artists,tracks.albums", "collapseBy", "FINGERPRINT"), next, linked("tracks", trackFrom))
 }
 
 // ArtistAlbums returns a page of an artist's albums.
@@ -173,23 +173,20 @@ func (k *Catalog) ArtistAlbums(ctx context.Context, artistID, next string) (Page
 	if !numericID(artistID) {
 		return Page[Album]{}, fmt.Errorf("%w: artist %q", ErrInvalidResourceID, truncate(artistID, 40))
 	}
-	return listPage(ctx, k, "/artists/"+artistID+"/relationships/albums", "albums.artists", next, "albums", albumFrom)
+	return listPage(ctx, k, "/artists/"+artistID+"/relationships/albums", k.catalogQuery("albums.artists"), next, linked("albums", albumFrom))
 }
 
-// listPage fetches the first page of path, or the page that next (a
-// links.next value from an earlier page of the same path) points to.
-func listPage[T any](ctx context.Context, k *Catalog, path, include, next, typ string,
-	conv func(*Document, Resource) (T, error), extra ...string) (Page[T], error) {
+// listPage fetches the first page of path with query first, or the page
+// that next (a links.next value from an earlier page of the same path)
+// points to. items turns the document into the page's items.
+func listPage[T any](ctx context.Context, k *Catalog, path string, first url.Values, next string,
+	items func(*Document) ([]T, error)) (Page[T], error) {
 	var (
 		doc *Document
 		err error
 	)
 	if next == "" {
-		q := url.Values{"countryCode": {k.country}, "include": {include}}
-		for i := 0; i+1 < len(extra); i += 2 {
-			q.Set(extra[i], extra[i+1])
-		}
-		doc, err = k.c.Get(ctx, path, q)
+		doc, err = k.c.Get(ctx, path, first)
 	} else {
 		if u, perr := url.Parse(next); perr != nil || u.IsAbs() || u.Host != "" || u.Path != path {
 			return Page[T]{}, fmt.Errorf("tidal: next page link does not belong to %s", path)
@@ -202,11 +199,26 @@ func listPage[T any](ctx context.Context, k *Catalog, path, include, next, typ s
 	if _, err := doc.Many(); err != nil {
 		return Page[T]{}, fmt.Errorf("tidal: %s: %w", path, err)
 	}
-	items, err := related(doc, Relationship{Data: doc.Data}, typ, conv)
+	out, err := items(doc)
 	if err != nil {
 		return Page[T]{}, err
 	}
-	return Page[T]{Items: items, Next: doc.Links.Next}, nil
+	return Page[T]{Items: out, Next: doc.Links.Next}, nil
+}
+
+// linked returns an items function for documents whose primary data links
+// to included resources of type typ.
+func linked[T any](typ string, conv func(*Document, Resource) (T, error)) func(*Document) ([]T, error) {
+	return func(doc *Document) ([]T, error) { return related(doc, Relationship{Data: doc.Data}, typ, conv) }
+}
+
+// catalogQuery is the first-page query for catalog lists.
+func (k *Catalog) catalogQuery(include string, extra ...string) url.Values {
+	q := url.Values{"countryCode": {k.country}, "include": {include}}
+	for i := 0; i+1 < len(extra); i += 2 {
+		q.Set(extra[i], extra[i+1])
+	}
+	return q
 }
 
 // related converts the included resources of type typ that rel links to, in

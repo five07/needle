@@ -20,6 +20,19 @@ type Catalog interface {
 	ArtistAlbums(ctx context.Context, artistID, next string) (tidal.Page[tidal.Album], error)
 }
 
+// Library reads and changes the user's favorites and playlists.
+// *tidal.Catalog implements it.
+type Library interface {
+	FavoriteTracks(ctx context.Context, sort tidal.Sort, next string) (tidal.Page[tidal.Track], error)
+	FavoriteAlbums(ctx context.Context, sort tidal.Sort, next string) (tidal.Page[tidal.Album], error)
+	FavoriteArtists(ctx context.Context, sort tidal.Sort, next string) (tidal.Page[tidal.Artist], error)
+	FavoritePlaylists(ctx context.Context, sort tidal.Sort, next string) (tidal.Page[tidal.Playlist], error)
+	OwnedPlaylists(ctx context.Context, next string) (tidal.Page[tidal.Playlist], error)
+	AddFavorite(ctx context.Context, c tidal.Collection, id string) error
+	RemoveFavorite(ctx context.Context, c tidal.Collection, id string) error
+	AddToPlaylist(ctx context.Context, playlistID, trackID string) error
+}
+
 // Playback starts and queues tracks. The views call it from commands, off
 // the UI goroutine.
 type Playback interface {
@@ -50,11 +63,16 @@ type Services struct {
 	// Ctx is canceled when the program stops. Default context.Background.
 	Ctx      context.Context
 	Catalog  Catalog
+	Library  Library
 	Playback Playback
 	// Logger receives failures in full; the UI shows short messages.
 	Logger *slog.Logger
 	// Tick schedules fn after d. Default tea.Tick (tests replace it).
 	Tick func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+
+	// known holds favorite state learned this session. Only the UI
+	// goroutine touches it.
+	known *favorites
 }
 
 func (s *Services) ctx() context.Context {
@@ -90,6 +108,10 @@ func userMessage(err error) string {
 		return "Not found on TIDAL."
 	case errors.Is(err, context.DeadlineExceeded):
 		return "TIDAL did not respond in time. Check your connection."
+	case errors.Is(err, tidal.ErrCollectionFull):
+		return "Your TIDAL collection is full."
+	case errors.Is(err, tidal.ErrPlaylistFull):
+		return "The playlist is full."
 	}
 	return "Something went wrong. See the log for details."
 }

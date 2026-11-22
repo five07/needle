@@ -246,7 +246,13 @@ func (s *SearchView) Bindings() []key.Binding {
 	if s.input.Focused() || len(s.results.entries) == 0 {
 		return []key.Binding{key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "search (in the input)"))}
 	}
-	return s.results.bindings()
+	return s.results.bindings(true)
+}
+
+// FavoriteChanged implements favoriteWatcher.
+func (s *SearchView) FavoriteChanged(FavoriteMsg) tea.Cmd {
+	s.results.favoritesChanged()
+	return nil
 }
 
 // Capturing implements View.

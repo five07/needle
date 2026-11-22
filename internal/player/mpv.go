@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,8 +32,16 @@ type MPVConfig struct {
 	StartTimeout time.Duration
 	// PollInterval is how often the position is sampled.
 	PollInterval time.Duration
-	// QuitTimeout bounds how long Close waits for mpv to exit before killing it.
+	// QuitTimeout bounds how long Close takes, the fade included, before
+	// mpv is killed.
 	QuitTimeout time.Duration
+	// FadeOut is how long Close ramps the volume down when a track is
+	// playing, so quitting does not cut the stream mid-waveform (an audible
+	// pop). Default 100 ms.
+	FadeOut time.Duration
+	// FadeDrain is how long Close then waits for audio already buffered in
+	// the output device to play out. Default 200 ms, mpv's audio buffer.
+	FadeDrain time.Duration
 }
 
 // maxSocketPath stays under the 108-byte sockaddr_un limit.
@@ -122,6 +131,12 @@ func StartMPV(ctx context.Context, cfg MPVConfig) (*MPV, error) {
 	}
 	if cfg.QuitTimeout == 0 {
 		cfg.QuitTimeout = 2 * time.Second
+	}
+	if cfg.FadeOut == 0 {
+		cfg.FadeOut = 100 * time.Millisecond
+	}
+	if cfg.FadeDrain == 0 {
+		cfg.FadeDrain = 200 * time.Millisecond
 	}
 	bin, err := exec.LookPath(cfg.Binary)
 	if err != nil {
@@ -324,19 +339,24 @@ func (m *MPV) Stop(ctx context.Context) error {
 	return err
 }
 
-// Close implements Engine. It asks mpv to quit, kills it after
-// QuitTimeout, and removes the socket and manifest files.
+// Close implements Engine. It fades out a playing track, asks mpv to
+// quit, kills it if it has not exited within QuitTimeout, and removes the
+// socket and manifest files.
 func (m *MPV) Close() error {
 	m.closeOnce.Do(func() {
 		m.mu.Lock()
 		m.closing = true
 		m.mu.Unlock()
 		ctx, cancel := context.WithTimeout(context.Background(), m.cfg.QuitTimeout)
+		defer cancel()
+		// The fade has its own budget, so quit keeps time when mpv stalls.
+		fadeCtx, cancelFade := context.WithTimeout(ctx, m.cfg.FadeOut+m.cfg.FadeDrain+fadeSlack)
+		m.fadeOut(fadeCtx)
+		cancelFade()
 		_, _ = m.ipc.command(ctx, "quit")
-		cancel()
 		select {
 		case <-m.exited:
-		case <-time.After(m.cfg.QuitTimeout):
+		case <-ctx.Done():
 			m.kill()
 		}
 		close(m.stop)
@@ -352,6 +372,60 @@ func (m *MPV) Close() error {
 		m.logger.Info("mpv stopped")
 	})
 	return nil
+}
+
+// fadeSteps is how many volume steps the quit fade takes; fadeSlack is
+// the extra time the fade's IPC round trips may use.
+const (
+	fadeSteps = 20
+	fadeSlack = 250 * time.Millisecond
+)
+
+// fadeOut silences a playing track before quit: it ramps the volume to
+// zero (linear in amplitude; mpv's volume is cubic), waits for the device
+// buffer to drain, then pauses. Nothing happens when mpv is idle or paused.
+// On any IPC error it stops, and quit goes ahead.
+func (m *MPV) fadeOut(ctx context.Context) {
+	data, err := m.ipc.command(ctx, "get_property", "core-idle")
+	var idle bool
+	if err != nil || json.Unmarshal(data, &idle) != nil || idle {
+		return
+	}
+	var vol float64
+	data, err = m.ipc.command(ctx, "get_property", "volume")
+	if err != nil || json.Unmarshal(data, &vol) != nil {
+		// Without the level a ramp could jump up: mute in one step instead.
+		if _, err := m.ipc.command(ctx, "set_property", "mute", true); err != nil {
+			return
+		}
+	} else {
+		step := m.cfg.FadeOut / fadeSteps
+		for i := fadeSteps - 1; i >= 0; i-- {
+			v := vol * math.Cbrt(float64(i)/fadeSteps)
+			if _, err := m.ipc.command(ctx, "set_property", "volume", v); err != nil {
+				return
+			}
+			if !sleep(ctx, step) {
+				return
+			}
+		}
+	}
+	if !sleep(ctx, m.cfg.FadeDrain) {
+		return
+	}
+	_, _ = m.ipc.command(ctx, "set_property", "pause", true)
+}
+
+// sleep waits d, or reports false if ctx ends first.
+func sleep(ctx context.Context, d time.Duration) bool {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 func (m *MPV) kill() {

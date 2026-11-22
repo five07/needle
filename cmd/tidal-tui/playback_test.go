@@ -214,6 +214,16 @@ func TestRunSearchEndToEnd(t *testing.T) {
 			 "relationships":{"artists":{"data":[{"id":"8847","type":"artists"}]}}},
 			 {"id":"8847","type":"artists","attributes":{"name":"Daft Punk"}}]}`)
 	})
+	var favMethod, favBody string
+	f.mux.HandleFunc("/v2/userCollectionTracks/me/relationships/items", func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		favMethod, favBody = r.Method, string(b)
+	})
+	f.mux.HandleFunc("/v2/userCollectionPlaylists/me/relationships/items", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		io.WriteString(w, `{"data":[{"id":"6f76-cfa5","type":"playlists"}],
+			"included":[{"id":"6f76-cfa5","type":"playlists","attributes":{"name":"Road trip","numberOfTrackItems":12}}]}`)
+	})
 	d := f.deps()
 	var engineStarts int
 	d.newEngine = func(context.Context, player.MPVConfig) (player.Engine, error) {
@@ -245,6 +255,11 @@ func TestRunSearchEndToEnd(t *testing.T) {
 			uiErr = errors.New("results missing:\n" + out)
 			return nil
 		}
+		feed(key("f"))
+		if out := screen(m); !strings.Contains(out, "Added to favorites: One More Time") {
+			uiErr = errors.New("favorite notice missing:\n" + out)
+			return nil
+		}
 		feed(key("enter"))
 		if out := screen(m); !strings.Contains(out, "Playing One More Time") {
 			uiErr = errors.New("play notice missing:\n" + out)
@@ -253,6 +268,11 @@ func TestRunSearchEndToEnd(t *testing.T) {
 		feed(exec(notices, 5*time.Second)...)
 		if out := screen(m); !strings.Contains(out, "not available on TIDAL") && !strings.Contains(out, "mpv is not installed") {
 			uiErr = errors.New("player message missing:\n" + out)
+			return nil
+		}
+		feed(key("2"))
+		if out := screen(m); !strings.Contains(out, "Road trip") {
+			uiErr = errors.New("library playlists missing:\n" + out)
 		}
 		return nil
 	}
@@ -262,6 +282,9 @@ func TestRunSearchEndToEnd(t *testing.T) {
 	}
 	if uiErr != nil {
 		t.Fatal(uiErr)
+	}
+	if favMethod != http.MethodPost || favBody != `{"data":[{"id":"1550546","type":"tracks"}]}` {
+		t.Errorf("favorite request = %s %s", favMethod, favBody)
 	}
 	if searchQuery != "daft" || searchCountry != "US" {
 		t.Errorf("search query %q country %q", searchQuery, searchCountry)

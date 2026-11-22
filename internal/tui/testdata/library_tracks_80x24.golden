@@ -1,0 +1,24 @@
+┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
+│   Search      │  Playlists   Albums   Tracks   Artists      sort: date added │
+│ ▸ Library     │ ──────────────────────────────────────────────────────────── │
+│   Discovery   │ ♥ One More Time         Daft Punk      Discovery        5:20 │
+│   Queue       │ ♥ Harder, Better, Fas…  Daft Punk      Discovery        3:44 │
+│   Account     │ ♥ Get Lucky (feat. Ph…  Daft Punk, P…  Random Acc…      6:09 │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+├───────────────┴──────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                                                                              │
+│                               Nothing playing                                │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ / filter · tab next tab · j/k move · h back · enter play/open                │
+└──────────────────────────────────────────────────────────────────────────────┘

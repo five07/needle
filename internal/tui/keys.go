@@ -30,6 +30,12 @@ type KeyMap struct {
 	PlayNext  key.Binding
 	NextGroup key.Binding
 	PrevGroup key.Binding
+
+	// Library actions.
+	Favorite      key.Binding
+	Unfavorite    key.Binding
+	AddToPlaylist key.Binding
+	Sort          key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -55,6 +61,11 @@ var Keys = KeyMap{
 	PlayNext:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "play next")),
 	NextGroup: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next group")),
 	PrevGroup: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous group")),
+
+	Favorite:      key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "favorite")),
+	Unfavorite:    key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "unfavorite")),
+	AddToPlaylist: key.NewBinding(key.WithKeys("+"), key.WithHelp("+", "add to playlist")),
+	Sort:          key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "change sort")),
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

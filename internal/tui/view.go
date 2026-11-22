@@ -49,6 +49,11 @@ type PushMsg struct{ View View }
 // PopMsg returns to the previous view in the current section.
 type PopMsg struct{}
 
+// CloseMsg closes View if it is the top view of its section. A view that
+// finishes asynchronously closes itself this way, so it never closes
+// whatever the user opened meanwhile.
+type CloseMsg struct{ View View }
+
 // Push returns a command that opens v as a sub-view.
 func Push(v View) tea.Cmd { return func() tea.Msg { return PushMsg{View: v} } }
 
@@ -56,6 +61,19 @@ func Push(v View) tea.Cmd { return func() tea.Msg { return PushMsg{View: v} } }
 // they are pushed. The shell runs the returned command after the push.
 type Opener interface {
 	Open() tea.Cmd
+}
+
+// Filterer is implemented by views with their own filter. In such a view
+// "/" starts the filter instead of going to Search.
+type Filterer interface {
+	StartFilter() tea.Cmd
+}
+
+// HintLeader is implemented by views whose most important keys go first
+// in the hint line, ahead of the general keys, so they still show on small
+// terminals. LeadHints is how many of the first Bindings lead.
+type HintLeader interface {
+	LeadHints() int
 }
 
 // ForViewMsg carries Msg to View wherever View is in the section stacks,

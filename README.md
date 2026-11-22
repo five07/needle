@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, and Search (with playback from results) are in place. The Library, Discovery, Queue, and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), and the Library (favorites and playlists) are in place. The Discovery, Queue, and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -68,9 +68,12 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 | `enter` | Play the selected track, or open the selected album, artist, or playlist |
 | `a` | Add the selected track, album, or playlist to the end of the queue |
 | `A` | Play the selected track, album, or playlist next |
-| `tab` / `shift+tab` | Jump to the next / previous group of results |
-| `esc`, `backspace` | Go back, or leave the search input |
-| `/` | Go to Search and type a query |
+| `tab` / `shift+tab` | Jump to the next / previous group of results, or switch Library tabs |
+| `f` / `F` | Add the selected track, album, artist, or playlist to your favorites / remove it |
+| `+` | Add the selected track to one of your playlists |
+| `o` | Change the sort order of the current Library tab |
+| `esc`, `backspace` | Go back, leave the search input, or clear the Library filter |
+| `/` | Go to Search and type a query (in Library: filter the current tab) |
 | `1` to `5` | Jump to a sidebar section |
 | `?` | Show or hide every key for the current screen (`j`/`k` scroll it when it does not fit) |
 | `q` | Quit |
@@ -78,7 +81,7 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 
 While the search input has focus, letters type into it, so `q`, `j`, and the other single-letter keys do not act. Press `esc` (or `enter`) to leave the input.
 
-The hint line shows as many keys as fit; `?` lists them all.
+The hint line shows as many keys as fit; `?` lists them all. In the Library, `/ filter` and `tab` come first so they stay visible on small terminals.
 
 ### Search
 
@@ -88,6 +91,15 @@ Type in the search input and results appear after a short pause (300 ms), or pre
 - **`a` and `A`** queue one track, or every track of an album or playlist, up to 500 tracks (a notice says when the rest were left out). On an empty queue the first queued track starts playing. Artists are not queued directly: open the artist and queue its tracks.
 - **Opening an album or playlist** shows its tracks, loading more as you scroll toward the end. **Opening an artist** shows their top tracks, then their albums.
 - Search uses your account's country, so results match what you can play.
+
+### Library
+
+The Library has four tabs: **Playlists** (the ones you own and the ones you added, without folders), **Albums**, **Tracks**, and **Artists**. Switch with `tab` / `shift+tab` or by clicking a tab name. Each tab loads the first time you open it, newest added first, and loads more as you scroll toward the end. Play, queue, and open items with the same keys as in Search.
+
+- **`o`** cycles the server-side sort of the tab (date added, title or name, and artist for albums and tracks) and reloads it.
+- **`/`** filters the current tab by title, artist, and album, ignoring case and accents. While a filter is set, the rest of the tab loads in the background so the filter covers all of it, up to 5000 items (a notice says when it stops there). `enter` keeps the filter and returns to the list; `esc` clears it.
+- **`f` / `F`** work in every view. TIDAL has no way to ask whether one item is a favorite, so a `♥` marks only items tidal-tui knows about: ones loaded in the Library or favorited this session. Removing a favorite in the Library drops its row; adding one elsewhere reloads the matching tab.
+- **`+`** on a track opens a list of the playlists you own. `enter` adds the track to the selected one and `esc` cancels. A track already in that playlist is not added twice.
 
 ### Mouse
 
@@ -150,6 +162,10 @@ The next track in the queue is fetched about 45 seconds before the current one e
 ### Errors
 
 A missing mpv, a busy device, an output that cannot be opened, or an mpv crash stops playback with a message instead of hanging. If a stream breaks mid-track (usually because its signed links expired), tidal-tui fetches a fresh stream once and resumes from the same position.
+
+### Quitting
+
+Quitting while a track plays fades the output to silence first (about 100 ms), then waits about 200 ms for audio already in the device buffer to play out, so the stream is not cut mid-waveform with an audible pop. This makes quitting about 300 ms slower, only while something is playing. The fade changes the volume only after you quit, so it does not affect bit-perfect playback. If mpv stops responding, quitting still ends within 2 seconds.
 
 ## Configuration
 
