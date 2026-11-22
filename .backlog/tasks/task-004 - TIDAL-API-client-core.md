@@ -1,11 +1,11 @@
 ---
 id: TASK-004
 title: TIDAL API client core
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T03:53:35Z'
-updated_date: '2026-11-22T05:19:25Z'
+updated_date: '2026-11-22T05:39:41Z'
 labels:
   - api
 milestone: m-0
@@ -79,3 +79,9 @@ Implemented 2026-11-22 in internal/tidal (standard library only).
 - Live check (temporary build-tagged test, deleted afterwards): album include resolution (1 artist, 14 tracks), 3 real cursor pages (60 items), Atmos manifest -> ErrClientNotEntitled, /albums/0 -> ErrInvalidResourceID.
 - Assumption: 500 is not retried (only 502/503/504/429). DoD #6 README: no user-visible behavior change, nothing to document.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Official TIDAL API client core in internal/tidal: JSON:API document model, typed and sentinel errors, one refresh on 401, backoff for 429/502/503/504 with Retry-After, idempotency keys for writes, cursor pagination iterator, host guard, body caps. 99.2% coverage, 13/13 mutations killed. Reviewed and committed by the user (f918157).
+<!-- SECTION:FINAL_SUMMARY:END -->

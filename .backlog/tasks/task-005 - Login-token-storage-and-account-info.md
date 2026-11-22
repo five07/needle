@@ -1,11 +1,11 @@
 ---
 id: TASK-005
 title: Login, token storage, and account info
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T03:53:35Z'
-updated_date: '2026-11-22T05:33:58Z'
+updated_date: '2026-11-22T05:39:41Z'
 labels:
   - api
   - auth
@@ -73,3 +73,9 @@ Implemented 2026-11-22.
 - Not exercised live against TIDAL in this change; the same flow was proven live by the TASK-001 spike. User to verify: go run ./cmd/tidal-tui with TIDAL_CLIENT_ID set.
 - New deps: github.com/zalando/go-keyring v0.2.8 (approved), indirect godbus/dbus/v5, danieljoos/wincred, golang.org/x/sys.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Login and credentials: PKCE login on a 127.0.0.1-only loopback listener, keyring storage with a 0600 file fallback, silent refresh, re-login on revocation, -logout, and Client.Me for account info. auth 96.8%, cmd 98.9% coverage; 20/20 mutations killed. Live login not re-run in this change (proven by the TASK-001 spike). Reviewed and committed by the user (2d1e1fc).
+<!-- SECTION:FINAL_SUMMARY:END -->

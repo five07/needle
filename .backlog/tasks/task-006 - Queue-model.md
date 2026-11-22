@@ -1,11 +1,11 @@
 ---
 id: TASK-006
 title: Queue model
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T03:53:35Z'
-updated_date: '2026-11-22T05:25:15Z'
+updated_date: '2026-11-22T05:39:41Z'
 labels:
   - player
 milestone: m-1
@@ -67,3 +67,9 @@ Implemented 2026-11-22 in internal/queue (standard library only), generic Queue[
 - Tests: 100% coverage, stable across -count=3 with -race, concurrent stress test with 8 goroutines; 8/8 mutations killed.
 - DoD notes: no README change (internal package, no user-visible behavior yet); no logging needed in a pure data structure.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Generic, concurrency-safe play queue in internal/queue: play next, add, remove, clear, next/previous/jump, reversible shuffle of upcoming tracks, repeat off/all/one, stop at the end. 100% coverage, race-clean, 8/8 mutations killed. Reviewed and committed by the user (2d1e1fc).
+<!-- SECTION:FINAL_SUMMARY:END -->
