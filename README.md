@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view, and the Account view are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view, the Account view, and desktop media controls (MPRIS) are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -206,6 +206,21 @@ A missing mpv, a busy device, an output that cannot be opened, or an mpv crash s
 ### Quitting
 
 Quitting while a track plays fades the output to silence first (about 100 ms), then waits about 200 ms for audio already in the device buffer to play out, so the stream is not cut mid-waveform with an audible pop. This makes quitting about 300 ms slower, only while something is playing. The fade changes the volume only after you quit, so it does not affect bit-perfect playback. If mpv stops responding, quitting still ends within 2 seconds.
+
+## Desktop integration (MPRIS)
+
+While it runs, tidal-tui appears on the D-Bus session bus as `org.mpris.MediaPlayer2.tidal-tui` (a second copy adds `.instance<pid>`), so media keys, `playerctl`, and bar widgets such as Waybar's `mpris` module and omarchy-shell can show and control it:
+
+- **Shown:** title, artists, album, length, the TIDAL track link, playing/paused/stopped, shuffle, and repeat (`None`, `Track`, or `Playlist`), updated as they change.
+- **Controls:** play, pause, play/pause, stop, next, previous, and setting shuffle and repeat.
+- **Not supported:** seeking (`CanSeek` is false), changing the volume (reported, but read-only until volume control is decided), album art, and raising or quitting the app.
+
+Without a session bus (for example over SSH), tidal-tui logs a warning and runs without desktop integration. Try it with:
+
+```sh
+playerctl -p tidal-tui metadata
+playerctl -p tidal-tui play-pause
+```
 
 ## Configuration
 

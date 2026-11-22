@@ -24,9 +24,18 @@ import (
 
 // stubTransport counts player calls.
 type stubTransport struct {
-	plays, changes, pauses, nexts, prevs int
-	err                                  error
+	plays, changes, pauses, nexts, prevs, stops int
+	setPaused                                   []bool
+	state                                       player.PlayState
+	err                                         error
 }
+
+func (s *stubTransport) SetPaused(_ context.Context, p bool) error {
+	s.setPaused = append(s.setPaused, p)
+	return s.err
+}
+func (s *stubTransport) Stop(context.Context) error { s.stops++; return s.err }
+func (s *stubTransport) Status() player.Status      { return player.Status{State: s.state} }
 
 func (s *stubTransport) Play(context.Context) error         { s.plays++; return s.err }
 func (s *stubTransport) QueueChanged(context.Context) error { s.changes++; return s.err }

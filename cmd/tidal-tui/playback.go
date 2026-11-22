@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/five07/tidal-tui/internal/config"
+	"github.com/five07/tidal-tui/internal/mpris"
 	"github.com/five07/tidal-tui/internal/player"
 	"github.com/five07/tidal-tui/internal/queue"
 	"github.com/five07/tidal-tui/internal/tidal"
@@ -20,8 +21,11 @@ type transport interface {
 	Play(ctx context.Context) error
 	QueueChanged(ctx context.Context) error
 	TogglePause(ctx context.Context) error
+	SetPaused(ctx context.Context, paused bool) error
+	Stop(ctx context.Context) error
 	Next(ctx context.Context) error
 	Previous(ctx context.Context) error
+	Status() player.Status
 }
 
 // playback implements tui.Playback on the play queue and the player.
@@ -111,6 +115,13 @@ func (b *playback) SetShuffle(ctx context.Context, on bool) error {
 	return b.p.QueueChanged(ctx)
 }
 
+// SetRepeat sets the repeat mode (for MPRIS LoopStatus).
+func (b *playback) SetRepeat(ctx context.Context, r queue.Repeat) error {
+	b.q.SetRepeat(r)
+	b.edited()
+	return b.p.QueueChanged(ctx)
+}
+
 // CycleRepeat implements tui.Transport.
 func (b *playback) CycleRepeat(ctx context.Context) error {
 	b.q.CycleRepeat()
@@ -166,7 +177,9 @@ type watch struct {
 	mode    config.AudioMode
 	// best, when set, records the best quality received (decision 52).
 	best *bestQuality
-	now  func() time.Time // default time.Now
+	// mpris, when set, receives every change for desktop widgets.
+	mpris interface{ Update(mpris.State) }
+	now   func() time.Time // default time.Now
 }
 
 // watchStatus forwards player changes to the UI until ctx ends. It is the
@@ -181,8 +194,11 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 		case <-w.changed:
 		}
 		st := p.Status()
-		if w.status != nil {
+		if w.status != nil || w.mpris != nil {
 			np := nowPlaying(st, w.q.Snapshot(), w.mode)
+			if w.mpris != nil {
+				w.mpris.Update(mprisState(np, st.Volume))
+			}
 			if w.best != nil {
 				now := time.Now
 				if w.now != nil {
@@ -191,7 +207,9 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 				w.best.offer(st, now())
 				np.Best, np.BestSeen = w.best.label(), w.best.seen
 			}
-			sendLatest(w.status, np)
+			if w.status != nil {
+				sendLatest(w.status, np)
+			}
 		}
 		if msg := st.Message; msg != "" && msg != last {
 			select {

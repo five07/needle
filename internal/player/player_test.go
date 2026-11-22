@@ -774,3 +774,37 @@ func TestStopAfterEngineFailure(t *testing.T) {
 	close(gate)
 	waitFor(t, func() bool { h.res.mu.Lock(); defer h.res.mu.Unlock(); return len(h.res.resolved) == 1 })
 }
+
+// SetPaused is idempotent: MPRIS Play and Pause are not toggles.
+func TestSetPaused(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a")
+	if err := h.p.SetPaused(ctx(), true); err != nil { // no engine yet
+		t.Fatal(err)
+	}
+	h.p.Play(ctx())
+	e := h.engine()
+	waitFor(t, func() bool { return e.count("play") == 1 })
+	h.send(e, Event{Kind: EventStarted, Key: uint64(h.handle(0))})
+	steps := []struct {
+		paused bool
+		want   PlayState
+		calls  int // engine pause calls so far
+	}{
+		{false, Playing, 0}, // already playing
+		{true, Paused, 1},
+		{true, Paused, 1}, // already paused
+		{false, Playing, 2},
+	}
+	for i, st := range steps {
+		if err := h.p.SetPaused(ctx(), st.paused); err != nil {
+			t.Fatal(err)
+		}
+		if s := h.p.Status(); s.State != st.want || e.count("pause true")+e.count("pause false") != st.calls {
+			t.Errorf("step %d: state %v, calls %v", i, s.State, e.callList())
+		}
+	}
+	h.p.Stop(ctx())
+	if err := h.p.SetPaused(ctx(), false); err != nil || h.p.Status().State != Stopped {
+		t.Errorf("stopped: %v %v", err, h.p.Status().State)
+	}
+}

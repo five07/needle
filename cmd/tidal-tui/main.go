@@ -24,6 +24,7 @@ import (
 	"github.com/five07/tidal-tui/internal/tidal"
 	"github.com/five07/tidal-tui/internal/tui"
 	"github.com/five07/tidal-tui/internal/xdg"
+	"github.com/godbus/dbus/v5"
 )
 
 // version is the release version, set at build time with
@@ -44,6 +45,9 @@ type deps struct {
 	runUI func(ctx context.Context, m tea.Model) error
 	// newEngine starts the audio engine on first playback.
 	newEngine func(ctx context.Context, cfg player.MPVConfig) (player.Engine, error)
+	// sessionBus connects to the D-Bus session bus for MPRIS. Nil turns
+	// MPRIS off (tests).
+	sessionBus func() (*dbus.Conn, error)
 }
 
 var defaultDeps = deps{
@@ -61,7 +65,8 @@ var defaultDeps = deps{
 		}
 		return m, nil
 	},
-	newOAuth: auth.NewOAuth,
+	newOAuth:   auth.NewOAuth,
+	sessionBus: func() (*dbus.Conn, error) { return dbus.ConnectSessionBus() },
 	login: func(ctx context.Context, o *auth.OAuth, out io.Writer) (auth.Tokens, error) {
 		return o.Login(ctx, out)
 	},
@@ -230,7 +235,12 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	} else {
 		best = &bestQuality{logger: logger} // not remembered
 	}
-	go watchStatus(uiCtx, p, watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best})
+	w := watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best}
+	mp, stopMPRIS := startMPRIS(d.sessionBus, pb, logger)
+	if mp != nil {
+		w.mpris = mp // only when registered: a nil *Service in the interface would not be nil
+	}
+	go watchStatus(uiCtx, p, w)
 	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified,
 		Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device}
 
@@ -242,7 +252,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 		Notices:  notices,
 		Status:   status,
 	})
-	return model, func() { cancel(); <-done }, nil
+	return model, func() { cancel(); <-done; stopMPRIS() }, nil
 }
 
 // account returns the logged-in user, running the browser login first when

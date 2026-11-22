@@ -323,6 +323,23 @@ The scope was simplified: login stays in the terminal before the TUI starts (it 
     - b) Only the AC fields: username, country, email, and highest quality.
     > MS: a
 
+### TASK-015 (MPRIS)
+
+55. **The D-Bus library.** MPRIS needs a D-Bus client. `github.com/godbus/dbus/v5` is already in `go.mod` as an indirect dependency (through go-keyring, same version), but the ticket does not name it, and the DoD limits new dependencies to those named.
+    - a) **(Recommended)** Make `github.com/godbus/dbus/v5` a direct dependency (its `prop` and `introspect` packages handle the D-Bus property and introspection interfaces). No new module is downloaded.
+    - b) No library: call `busctl` / `gdbus` as subprocesses. Fragile, and it cannot receive method calls well.
+    > MS: a
+
+56. **Album art in MPRIS metadata** (`mpris:artUrl`, which Waybar and omarchy-shell widgets can show). The queue does not carry cover URLs today, so this needs the album cover from the TIDAL API for each track.
+    - a) **(Recommended)** Leave it out of this task; add a backlog task for cover art (it would also suit the now-playing bar later).
+    - b) Include it: fetch the cover URL when a track is queued and pass it through.
+    > MS: c - I didn't plan on cover art. Maybe I'll add it later.
+
+57. **Volume over MPRIS.** Widgets can scroll to change the `Volume` property. TASK-018 still has to decide between output-device and software volume, and software volume makes the bit-perfect indicator show "altered".
+    - a) **(Recommended)** Report the volume read-only: writes are ignored (and logged at debug level) until TASK-018 decides.
+    - b) Writes set mpv's software volume in shared mode now.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -416,6 +433,9 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 50 | TASK-014 scope | Login stays in the terminal before the TUI starts; logout stays the `-logout` flag. TASK-014 is the Account view only. |
 | 52 | Highest quality | Remembered across runs in a file under `$XDG_STATE_HOME/tidal-tui/`, with the date first seen; `-logout` deletes it. |
 | 53 | Account view lines | Username, country, email, highest quality, and the read-only `quality`, audio mode, and device settings with a pointer to `config.toml`. |
+| 55 | D-Bus library | `github.com/godbus/dbus/v5` becomes a direct dependency (already indirect through go-keyring). |
+| 56 | MPRIS album art | None, and no follow-up task; the user may add it later. |
+| 57 | MPRIS volume | Reported read-only; writes are ignored and logged at debug level until TASK-018 decides. |
 
 ## Definition of Done
 

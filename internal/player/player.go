@@ -224,16 +224,31 @@ func (p *Player) Previous(ctx context.Context) error {
 // TogglePause pauses or resumes.
 func (p *Player) TogglePause(ctx context.Context) error {
 	return p.do(ctx, func(rctx context.Context) error {
-		if p.engine == nil || (p.st.State != Playing && p.st.State != Paused) {
-			return nil
-		}
-		pause := p.st.State == Playing
-		if err := p.engine.SetPaused(rctx, pause); err != nil {
-			return err
-		}
-		p.st.State = map[bool]PlayState{true: Paused, false: Playing}[pause]
-		return nil
+		return p.setPaused(rctx, p.st.State == Playing)
 	})
+}
+
+// SetPaused pauses (true) or resumes (false). It does nothing when the
+// player is already in that state, or not playing or paused (MPRIS Play
+// and Pause are not toggles).
+func (p *Player) SetPaused(ctx context.Context, paused bool) error {
+	return p.do(ctx, func(rctx context.Context) error {
+		return p.setPaused(rctx, paused)
+	})
+}
+
+func (p *Player) setPaused(ctx context.Context, pause bool) error {
+	if p.engine == nil || (p.st.State != Playing && p.st.State != Paused) {
+		return nil
+	}
+	if pause == (p.st.State == Paused) {
+		return nil
+	}
+	if err := p.engine.SetPaused(ctx, pause); err != nil {
+		return err
+	}
+	p.st.State = map[bool]PlayState{true: Paused, false: Playing}[pause]
+	return nil
 }
 
 // Stop stops playback.
