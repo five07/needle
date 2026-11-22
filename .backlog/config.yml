@@ -1,0 +1,27 @@
+project_name: "Tidal TUI"
+default_status: "To Do"
+statuses: ["To Do", "In Progress", "Done"]
+labels: []
+definition_of_done:
+  - "Every acceptance criterion has at least one test that fails without the change"
+  - "go test -race ./..., go vet ./..., and gofmt -l . are clean"
+  - "Coverage: changed non-UI packages 95%+, TUI packages 80%+ (teatest/golden); API code has httptest coverage against a fake TIDAL server"
+  - "Security self-review done (input validation, no token or internal leaks in errors, shared-state concurrency, no fail-open paths)"
+  - "go build ./cmd/tidal-tui succeeds and the binary starts"
+  - "README updated for behavior, config, keybinding, or tradeoff changes"
+  - "Only dependencies named in the ticket added; no out-of-scope changes"
+  - "slog logging to $XDG_STATE_HOME/tidal-tui/ with track_id/request_id fields; no tokens logged"
+date_format: "yyyy-mm-dd"
+max_column_width: 20
+default_editor: 'omarchy-launch-editor --inline'
+auto_open_browser: true
+default_port: 6420
+browser_hostname: "127.0.0.1"
+remote_operations: false
+auto_commit: false
+filesystem_only: false
+zero_padded_ids: 3
+bypass_git_hooks: false
+check_active_branches: false
+active_branch_days: 30
+task_prefix: "task"
