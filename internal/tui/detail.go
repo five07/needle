@@ -74,10 +74,10 @@ type TrackListView struct {
 }
 
 // entriesOf adapts a page source of T to one of entries.
-func entriesOf[T any](f pageFetch[T], conv func([]T, int) []entry) pageFetch[entry] {
+func entriesOf[T any](f pageFetch[T], conv func([]T) []entry) pageFetch[entry] {
 	return func(ctx context.Context, next string) (tidal.Page[entry], error) {
 		p, err := f(ctx, next)
-		return tidal.Page[entry]{Items: conv(p.Items, 0), Next: p.Next}, err
+		return tidal.Page[entry]{Items: conv(p.Items), Next: p.Next}, err
 	}
 }
 
@@ -223,7 +223,7 @@ func (v *TrackListView) more() tea.Cmd {
 }
 
 // Bindings implements View.
-func (v *TrackListView) Bindings() []key.Binding { return v.list.bindings(false) }
+func (v *TrackListView) Bindings() []key.Binding { return v.list.bindings() }
 
 // FavoriteChanged implements favoriteWatcher.
 func (v *TrackListView) FavoriteChanged(FavoriteMsg) tea.Cmd {
@@ -240,21 +240,23 @@ const (
 	partAlbums
 )
 
-// ArtistView shows an artist's top tracks, then their albums. Albums load
-// more pages as the cursor nears the end.
+var artistTabTitles = [...]string{partTracks: "Top tracks", partAlbums: "Albums"}
+
+// ArtistView shows an artist's top tracks and albums in sub-tabs
+// (decision 46). Top tracks are one page; albums load more pages as the
+// cursor nears the end.
 type ArtistView struct {
 	svc    *Services
 	artist tidal.Artist
-	list   entryList
-	top    []tidal.Track
-	albums []tidal.Album
+	lists  [2]entryList // by part
+	active int          // part shown; -1 until a list has items
 	tracks pager
 	albPgr pager
 }
 
 // NewArtistView returns the detail view for artist a.
 func NewArtistView(svc *Services, a tidal.Artist) *ArtistView {
-	return &ArtistView{svc: svc, artist: a, list: newEntryList(svc)}
+	return &ArtistView{svc: svc, artist: a, lists: [2]entryList{newEntryList(svc), newEntryList(svc)}, active: -1}
 }
 
 func (v *ArtistView) fetchTracks(ctx context.Context, next string) (tidal.Page[tidal.Track], error) {
@@ -275,37 +277,55 @@ func (v *ArtistView) Open() tea.Cmd {
 // Title implements View.
 func (v *ArtistView) Title() string { return Sanitize(v.artist.Name) }
 
-// rebuild lays out both sections, keeping the selected row.
-func (v *ArtistView) rebuild() {
-	var es []entry
-	if len(v.top) > 0 {
-		es = append(es, headingEntry("Top tracks", partTracks))
-		es = append(es, trackEntries(v.top, partTracks)...)
-	}
-	if len(v.albums) > 0 {
-		es = append(es, headingEntry("Albums", partAlbums))
-		es = append(es, albumEntries(v.albums, partAlbums)...)
-	}
-	cur := v.list.Cursor()
-	sel, had := v.list.selected()
-	v.list.set(es)
-	if had && sel.kind == entryAlbum {
-		// Tracks arriving after albums shift the rows; follow the album.
-		for i, en := range es {
-			if en.kind == entryAlbum && en.album.ID == sel.album.ID {
-				cur = i
-			}
+// parts returns the parts that have items, in tab order (AC #2).
+func (v *ArtistView) parts() []int {
+	var out []int
+	for p := range v.lists {
+		if len(v.lists[p].entries) > 0 {
+			out = append(out, p)
 		}
 	}
-	if had {
-		v.list.Select(cur)
-		v.list.skip(1)
+	return out
+}
+
+// arrived selects the first part to have items; a part arriving later
+// leaves the shown tab alone.
+func (v *ArtistView) arrived(part int) {
+	if v.active < 0 {
+		v.active = part
+	}
+}
+
+// tabTitles returns the titles of the shown tabs and the index of the
+// active one.
+func (v *ArtistView) tabTitles() (titles []string, cur int) {
+	for i, p := range v.parts() {
+		titles = append(titles, artistTabTitles[p])
+		if p == v.active {
+			cur = i
+		}
+	}
+	return titles, cur
+}
+
+func (v *ArtistView) switchTab(delta int) {
+	ps := v.parts()
+	for i, p := range ps {
+		if p == v.active {
+			v.active = ps[(i+delta+len(ps))%len(ps)]
+			return
+		}
 	}
 }
 
 // Render implements View.
 func (v *ArtistView) Render(width, height int, focused bool) string {
-	head := []string{styleTitle.Render(fit(Sanitize(v.artist.Name), width)), styleBorder.Render(strings.Repeat("─", width))}
+	head := []string{styleTitle.Render(fit(Sanitize(v.artist.Name), width))}
+	titles, cur := v.tabTitles()
+	if len(titles) > 0 {
+		head = append(head, tabBar(titles, cur, width, ""))
+	}
+	head = append(head, styleBorder.Render(strings.Repeat("─", width)))
 	bodyH := max(height-len(head), 0)
 	var body string
 	var notes []string
@@ -316,8 +336,8 @@ func (v *ArtistView) Render(width, height int, focused bool) string {
 		notes = append(notes, "Could not load albums: "+v.albPgr.errText)
 	}
 	switch {
-	case len(v.list.entries) > 0:
-		body = v.list.render(width, max(bodyH-len(notes), 0), focused)
+	case len(titles) > 0:
+		body = v.lists[v.active].render(width, max(bodyH-len(notes), 0), focused)
 	case !v.tracks.done || !v.albPgr.done:
 		body = styleDim.Render(fit("Loading…", width))
 	case len(notes) == 0:
@@ -336,38 +356,82 @@ func (v *ArtistView) Render(width, height int, focused bool) string {
 func (v *ArtistView) Update(msg tea.Msg) tea.Cmd {
 	switch m := msg.(type) {
 	case pageMsg[tidal.Track]:
-		if v.tracks.received(v.svc, "artist tracks", m.err, "") {
-			v.top = m.page.Items
-			v.rebuild()
+		if v.tracks.received(v.svc, "artist tracks", m.err, "") && len(m.page.Items) > 0 {
+			v.lists[partTracks].set(trackEntries(m.page.Items))
+			v.arrived(partTracks)
 		}
 		return nil
 	case pageMsg[tidal.Album]:
-		if v.albPgr.received(v.svc, "artist albums", m.err, m.page.Next) {
-			v.albums = append(v.albums, m.page.Items...)
-			v.rebuild()
+		if v.albPgr.received(v.svc, "artist albums", m.err, m.page.Next) && len(m.page.Items) > 0 {
+			v.lists[partAlbums].add(albumEntries(m.page.Items)...)
+			v.arrived(partAlbums)
 		}
 		return v.more()
+	}
+	if v.active < 0 {
+		return nil
+	}
+	l := &v.lists[v.active]
+	switch m := msg.(type) {
+	case tea.KeyPressMsg:
+		switch {
+		case key.Matches(m, Keys.NextTab):
+			v.switchTab(1)
+			return v.more()
+		case key.Matches(m, Keys.PrevTab):
+			v.switchTab(-1)
+			return v.more()
+		}
 	case ClickMsg:
-		m.Y -= 2
+		if m.Y == 1 {
+			titles, _ := v.tabTitles()
+			if i := tabAt(titles, m.X); i >= 0 {
+				v.active = v.parts()[i]
+			}
+			return v.more()
+		}
+		m.Y -= 3 // the title and separator rows land on no list row
 		msg = m
 	}
-	cmd, _ := v.list.update(msg)
+	cmd, _ := l.update(msg)
 	return tea.Batch(cmd, v.more())
 }
 
+// more loads the next albums page when the Albums cursor nears the end.
 func (v *ArtistView) more() tea.Cmd {
-	if v.albPgr.want(v.list.Cursor(), len(v.list.entries)) {
+	l := &v.lists[partAlbums]
+	if v.albPgr.want(l.Cursor(), len(l.entries)) {
 		return fetchPage(v, v.svc, &v.albPgr, partAlbums, v.fetchAlbums)
 	}
 	return nil
 }
 
 // Bindings implements View.
-func (v *ArtistView) Bindings() []key.Binding { return v.list.bindings(true) }
+func (v *ArtistView) Bindings() []key.Binding {
+	if v.active < 0 {
+		return nil
+	}
+	bs := v.lists[v.active].bindings()
+	if len(v.parts()) < 2 {
+		return bs
+	}
+	bs = append([]key.Binding{key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab"))}, bs...)
+	return append(bs, key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")))
+}
+
+// LeadHints implements HintLeader: with two tabs, tab comes first (AC #4).
+func (v *ArtistView) LeadHints() int {
+	if len(v.parts()) < 2 {
+		return 0
+	}
+	return 1
+}
 
 // FavoriteChanged implements favoriteWatcher.
 func (v *ArtistView) FavoriteChanged(FavoriteMsg) tea.Cmd {
-	v.list.favoritesChanged()
+	for i := range v.lists {
+		v.lists[i].favoritesChanged()
+	}
 	return nil
 }
 

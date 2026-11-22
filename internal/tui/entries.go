@@ -16,56 +16,49 @@ import (
 type entryKind int
 
 const (
-	entryHeading entryKind = iota
+	entryNone entryKind = iota // the zero entry: no item
 	entryTrack
 	entryAlbum
 	entryArtist
 	entryPlaylist
 )
 
-// entry is one row of a catalog list: a group heading or an item. Tracks
-// with the same group form the list Enter plays from (decision 28).
+// entry is one item of a catalog list. The tracks of a list form the list
+// Enter plays from (decision 28).
 type entry struct {
 	kind     entryKind
-	group    int
-	heading  string
 	track    tidal.Track
 	album    tidal.Album
 	artist   tidal.Artist
 	playlist tidal.Playlist
 }
 
-func headingEntry(text string, group int) entry {
-	return entry{kind: entryHeading, heading: text, group: group}
-}
-
-func trackEntries(ts []tidal.Track, group int) []entry {
+func trackEntries(ts []tidal.Track) []entry {
 	out := make([]entry, len(ts))
 	for i, t := range ts {
-		out[i] = entry{kind: entryTrack, track: t, group: group}
+		out[i] = entry{kind: entryTrack, track: t}
 	}
 	return out
 }
 
-func albumEntries(as []tidal.Album, group int) []entry {
+func albumEntries(as []tidal.Album) []entry {
 	out := make([]entry, len(as))
 	for i, a := range as {
-		out[i] = entry{kind: entryAlbum, album: a, group: group}
+		out[i] = entry{kind: entryAlbum, album: a}
 	}
 	return out
 }
 
-func artistEntries(as []tidal.Artist, group int) []entry {
+func artistEntries(as []tidal.Artist) []entry {
 	out := make([]entry, len(as))
 	for i, a := range as {
-		out[i] = entry{kind: entryArtist, artist: a, group: group}
+		out[i] = entry{kind: entryArtist, artist: a}
 	}
 	return out
 }
 
 // entryList is a list of catalog entries with the item actions: Enter
-// plays a track or opens a collection, a/A queue, tab/shift+tab move
-// between groups.
+// plays a track or opens a collection, a/A queue, f/F favorite.
 type entryList struct {
 	List
 	svc     *Services
@@ -83,14 +76,12 @@ func (e *entryList) set(entries []entry) {
 	e.width = 0
 	e.cursor, e.offset = 0, 0
 	e.relayout(max(e.width, 1))
-	e.skip(1)
 }
 
 // add appends entries, keeping the cursor.
 func (e *entryList) add(entries ...entry) {
 	e.entries = append(e.entries, entries...)
 	e.relayout(max(e.width, 1))
-	e.skip(1)
 }
 
 func (e *entryList) relayout(width int) {
@@ -98,7 +89,6 @@ func (e *entryList) relayout(width int) {
 	for i, en := range e.entries {
 		rows[i] = rowText(en, width, e.isFavorite(en))
 	}
-	e.heading = func(i int) bool { return i < len(e.entries) && e.entries[i].kind == entryHeading }
 	e.SetRows(rows)
 }
 
@@ -110,23 +100,9 @@ func (e *entryList) render(width, height int, focused bool) string {
 	return e.List.Render(width, height, focused)
 }
 
-// skip moves the cursor off a heading row, in direction dir first.
-func (e *entryList) skip(dir int) {
-	for _, d := range []int{dir, -dir} {
-		i := e.cursor
-		for i >= 0 && i < len(e.entries) && e.entries[i].kind == entryHeading {
-			i += d
-		}
-		if i >= 0 && i < len(e.entries) {
-			e.Select(i)
-			return
-		}
-	}
-}
-
 // selected returns the entry under the cursor.
 func (e *entryList) selected() (entry, bool) {
-	if e.cursor < 0 || e.cursor >= len(e.entries) || e.entries[e.cursor].kind == entryHeading {
+	if e.cursor < 0 || e.cursor >= len(e.entries) {
 		return entry{}, false
 	}
 	return e.entries[e.cursor], true
@@ -137,18 +113,8 @@ func (e *entryList) selected() (entry, bool) {
 func (e *entryList) update(msg tea.Msg) (cmd tea.Cmd, handled bool) {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
-		before := e.cursor
 		switch {
 		case e.HandleKey(msg):
-			dir := 1
-			if e.cursor < before || key.Matches(msg, Keys.Bottom) {
-				dir = -1
-			}
-			e.skip(dir)
-		case key.Matches(msg, Keys.NextGroup):
-			e.jumpGroup(1)
-		case key.Matches(msg, Keys.PrevGroup):
-			e.jumpGroup(-1)
 		case key.Matches(msg, Keys.Open):
 			return e.activate(), true
 		case key.Matches(msg, Keys.QueueAdd):
@@ -170,7 +136,7 @@ func (e *entryList) update(msg tea.Msg) (cmd tea.Cmd, handled bool) {
 		}
 		return nil, true
 	case ClickMsg:
-		if i := e.RowAt(msg.Y); i >= 0 && e.entries[i].kind != entryHeading {
+		if i := e.RowAt(msg.Y); i >= 0 {
 			e.Select(i)
 			if msg.Double {
 				return e.activate(), true
@@ -179,36 +145,12 @@ func (e *entryList) update(msg tea.Msg) (cmd tea.Cmd, handled bool) {
 		return nil, true
 	case WheelMsg:
 		e.Scroll(msg.Delta)
-		e.skip(msg.Delta)
 		return nil, true
 	}
 	return nil, false
 }
 
-// jumpGroup moves to the first item of the next (dir 1) or previous group,
-// wrapping around.
-func (e *entryList) jumpGroup(dir int) {
-	cur, ok := e.selected()
-	if !ok {
-		return
-	}
-	var firsts []int // first item of each group, in order
-	last := -1
-	for i, en := range e.entries {
-		if en.kind != entryHeading && (len(firsts) == 0 || en.group != last) {
-			firsts = append(firsts, i)
-			last = en.group
-		}
-	}
-	for k, i := range firsts {
-		if e.entries[i].group == cur.group {
-			e.Select(firsts[(k+dir+len(firsts))%len(firsts)])
-			return
-		}
-	}
-}
-
-// activate plays the selected track from its group, or opens the selected
+// activate plays the list's tracks from the selected one, or opens the selected
 // album, artist, or playlist.
 func (e *entryList) activate() tea.Cmd {
 	en, ok := e.selected()
@@ -220,7 +162,7 @@ func (e *entryList) activate() tea.Cmd {
 		var tracks []tidal.Track
 		start := 0
 		for i, other := range e.entries {
-			if other.kind == entryTrack && other.group == en.group {
+			if other.kind == entryTrack {
 				if i == e.cursor {
 					start = len(tracks)
 				}
@@ -266,8 +208,8 @@ func (e *entryList) queue(next bool) tea.Cmd {
 }
 
 // bindings are the item keys, most used first, for the hint line and
-// help. Group keys are left out when groups is false.
-func (e *entryList) bindings(groups bool) []key.Binding {
+// help.
+func (e *entryList) bindings() []key.Binding {
 	if len(e.entries) == 0 {
 		return nil
 	}
@@ -277,9 +219,6 @@ func (e *entryList) bindings(groups bool) []key.Binding {
 	}
 	if e.svc != nil && e.svc.Discovery != nil {
 		bs = append(bs, Keys.Radio, Keys.Similar)
-	}
-	if groups {
-		bs = append(bs, Keys.NextGroup, Keys.PrevGroup)
 	}
 	return bs
 }
@@ -423,8 +362,6 @@ func rowText(en entry, width int, fav bool) string {
 		indent = favMark
 	}
 	switch en.kind {
-	case entryHeading:
-		return strings.ToUpper(en.heading)
 	case entryTrack:
 		t := en.track
 		if width < 50 {

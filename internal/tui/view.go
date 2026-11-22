@@ -103,9 +103,6 @@ type List struct {
 	cursor int
 	offset int
 	height int
-	// heading, when set, marks group heading rows: drawn as headings and
-	// never highlighted as selected.
-	heading func(i int) bool
 }
 
 // SetRows replaces the rows, keeping the cursor in range. Rows are plain
@@ -204,9 +201,7 @@ func (l *List) Render(width, height int, focused bool) string {
 			break
 		}
 		line := fit(l.rows[i], width)
-		if l.heading != nil && l.heading(i) {
-			line = styleHeading.Render(line)
-		} else if i == l.cursor {
+		if i == l.cursor {
 			if focused {
 				line = styleSelected.Render(line)
 			} else {

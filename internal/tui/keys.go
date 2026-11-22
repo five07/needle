@@ -26,10 +26,10 @@ type KeyMap struct {
 	Back     key.Binding
 
 	// Item actions (catalog views).
-	QueueAdd  key.Binding
-	PlayNext  key.Binding
-	NextGroup key.Binding
-	PrevGroup key.Binding
+	QueueAdd key.Binding
+	PlayNext key.Binding
+	NextTab  key.Binding
+	PrevTab  key.Binding
 
 	// Library actions.
 	Favorite      key.Binding
@@ -61,10 +61,10 @@ var Keys = KeyMap{
 	Open:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open or play")),
 	Back:     key.NewBinding(key.WithKeys("esc", "backspace"), key.WithHelp("esc", "back / leave input")),
 
-	QueueAdd:  key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add to queue")),
-	PlayNext:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "play next")),
-	NextGroup: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next group")),
-	PrevGroup: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous group")),
+	QueueAdd: key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add to queue")),
+	PlayNext: key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "play next")),
+	NextTab:  key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
+	PrevTab:  key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")),
 
 	Favorite:      key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "favorite")),
 	Unfavorite:    key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "unfavorite")),

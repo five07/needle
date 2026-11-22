@@ -193,10 +193,10 @@ func (v *DiscoveryView) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.KeyPressMsg:
 		switch {
-		case key.Matches(msg, Keys.NextGroup):
+		case key.Matches(msg, Keys.NextTab):
 			v.active = (v.active + 1) % len(v.tabs)
 			return nil
-		case key.Matches(msg, Keys.PrevGroup):
+		case key.Matches(msg, Keys.PrevTab):
 			v.active = (v.active - 1 + len(v.tabs)) % len(v.tabs)
 			return nil
 		}
@@ -236,7 +236,7 @@ func (v *DiscoveryView) Bindings() []key.Binding {
 		return nil
 	}
 	bs := []key.Binding{key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab"))}
-	bs = append(bs, t.list.bindings(false)...)
+	bs = append(bs, t.list.bindings()...)
 	return append(bs, key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")))
 }
 

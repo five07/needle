@@ -75,13 +75,13 @@ func NewLibraryView(svc *Services) *LibraryView {
 			empty: "No favorite albums yet. Press f on an album in Search to add one.",
 			fetch: func(ctx context.Context, s tidal.Sort, next string) ([]entry, string, error) {
 				p, err := lib.FavoriteAlbums(ctx, s, next)
-				return albumEntries(p.Items, 0), p.Next, err
+				return albumEntries(p.Items), p.Next, err
 			}},
 		{title: "Tracks", c: tidal.FavTracks,
 			empty: "No favorite tracks yet. Press f on a track to add it.",
 			fetch: func(ctx context.Context, s tidal.Sort, next string) ([]entry, string, error) {
 				p, err := lib.FavoriteTracks(ctx, s, next)
-				return trackEntries(p.Items, 0), p.Next, err
+				return trackEntries(p.Items), p.Next, err
 			}},
 		{title: "Artists", c: tidal.FavArtists,
 			empty: "No favorite artists yet. Press f on an artist in Search to add one.",
@@ -235,9 +235,9 @@ func (v *LibraryView) Update(msg tea.Msg) tea.Cmd {
 func (v *LibraryView) onKey(k tea.KeyPressMsg) tea.Cmd {
 	t := v.tab()
 	switch {
-	case key.Matches(k, Keys.NextGroup):
+	case key.Matches(k, Keys.NextTab):
 		return v.switchTab(1)
-	case key.Matches(k, Keys.PrevGroup):
+	case key.Matches(k, Keys.PrevTab):
 		return v.switchTab(-1)
 	case key.Matches(k, Keys.Sort):
 		t.sort = (t.sort + 1) % len(t.sorts)
@@ -376,7 +376,6 @@ func (v *LibraryView) FavoriteChanged(m FavoriteMsg) tea.Cmd {
 			t.list.set(t.all)
 		}
 		t.list.Select(cur)
-		t.list.skip(1)
 	}
 	return tea.Batch(cmds...)
 }
@@ -387,7 +386,7 @@ func (v *LibraryView) Bindings() []key.Binding {
 		key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
 	}
-	bs = append(bs, v.tab().list.bindings(false)...)
+	bs = append(bs, v.tab().list.bindings()...)
 	return append(bs, Keys.Sort, key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")))
 }
 

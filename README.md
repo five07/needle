@@ -68,7 +68,7 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 | `enter` | Play the selected track, or open the selected album, artist, or playlist |
 | `a` | Add the selected track, album, or playlist to the end of the queue |
 | `A` | Play the selected track, album, or playlist next |
-| `tab` / `shift+tab` | Switch to the next / previous tab (Search results, Library, Discovery), or jump between groups in an artist view |
+| `tab` / `shift+tab` | Switch to the next / previous tab (Search results, an artist, Library, Discovery) |
 | `f` / `F` | Add the selected track, album, artist, or playlist to your favorites / remove it |
 | `+` | Add the selected track to one of your playlists |
 | `R` | Start radio for the selected track or artist |
@@ -83,7 +83,7 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 
 While the search input has focus, letters type into it, so `q`, `j`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
 
-The hint line shows as many keys as fit; `?` lists them all. Tabbed views put their most important keys first so they stay visible on small terminals: `/ search` and `tab` in Search, `/ filter` and `tab` in the Library, and `tab` in Discovery.
+The hint line shows as many keys as fit; `?` lists them all. Tabbed views put their most important keys first so they stay visible on small terminals: `/ search` and `tab` in Search, `tab` in an artist view, `/ filter` and `tab` in the Library, and `tab` in Discovery.
 
 ### Search
 
@@ -91,7 +91,7 @@ Type in the search input and results appear after a short pause (300 ms), or pre
 
 - **Enter on a track** replaces the queue with the tracks of the list it is in (the Tracks tab, or the album or playlist), starting at that track.
 - **`a` and `A`** queue one track, or every track of an album or playlist, up to 500 tracks (a notice says when the rest were left out). On an empty queue the first queued track starts playing. Artists are not queued directly: open the artist and queue its tracks.
-- **Opening an album or playlist** shows its tracks, loading more as you scroll toward the end. **Opening an artist** shows their top tracks, then their albums.
+- **Opening an album or playlist** shows its tracks, loading more as you scroll toward the end. **Opening an artist** shows their **Top tracks** and **Albums** in tabs (a tab with nothing in it is left out); albums load more as you scroll.
 - Search uses your account's country, so results match what you can play.
 
 ### Library

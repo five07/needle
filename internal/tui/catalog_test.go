@@ -568,7 +568,7 @@ func describe(en entry) string {
 	case entryPlaylist:
 		return "playlist " + en.playlist.ID
 	}
-	return "heading"
+	return "none"
 }
 
 func TestResultActions(t *testing.T) {
@@ -699,10 +699,9 @@ func TestActionsWithoutPlayback(t *testing.T) {
 	}
 	// An empty list has no actions or item bindings.
 	var l entryList
-	if l.activate() != nil || l.queue(true) != nil || l.bindings(true) != nil {
+	if l.activate() != nil || l.queue(true) != nil || l.bindings() != nil {
 		t.Error("empty list acted")
 	}
-	l.jumpGroup(1)
 }
 
 func TestAlbumView(t *testing.T) {
@@ -820,48 +819,97 @@ func TestArtistView(t *testing.T) {
 	e.cat.albums["8847"] = []tidal.Page[tidal.Album]{{Items: albums, Next: "p1"}, {Items: []tidal.Album{aDisc}}}
 	m := e.model(80, 24)
 	v := NewArtistView(e.svc, arDaft)
-	if !strings.Contains(ansi.Strip(v.Render(40, 4, true)), "Loading…") {
+	if !strings.Contains(ansi.Strip(v.Render(40, 4, true)), "Loading…") || v.Bindings() != nil || v.Update(press("j")) != nil {
 		t.Error("loading state")
 	}
 	drive(m, PushMsg{View: v})
-	// 2 headings + 2 tracks + 20 albums; top tracks load one page only.
-	if len(v.list.entries) != 24 || e.cat.count("artist:8847") != 1 || e.cat.count("albums:8847") != 1 {
-		t.Fatalf("entries %d calls %v", len(v.list.entries), e.cat.calls)
+	// Two tabs; top tracks load one page only.
+	tracks, albumsTab := &v.lists[partTracks], &v.lists[partAlbums]
+	if titles, cur := v.tabTitles(); strings.Join(titles, ",") != "Top tracks,Albums" || cur != 0 ||
+		len(tracks.entries) != 2 || len(albumsTab.entries) != 20 || e.cat.count("artist:8847") != 1 || e.cat.count("albums:8847") != 1 {
+		t.Fatalf("tabs %q, entries %d/%d calls %v", titles, len(tracks.entries), len(albumsTab.entries), e.cat.calls)
 	}
-	drive(m, press("G"))
-	if e.cat.count("albums:8847") != 2 || len(v.list.entries) != 25 {
-		t.Fatalf("album paging: entries %d calls %v", len(v.list.entries), e.cat.calls)
-	}
-	// Enter on a top track plays the top tracks; on an album opens it.
-	drive(m, press("g"), press("j"), press("enter"))
+	// Enter on a top track plays the top tracks.
+	drive(m, press("j"), press("enter"))
 	if got := e.play.got(); len(got) != 1 || !reflect.DeepEqual(got[0].ids, []string{"1", "3"}) || got[0].start != 1 {
 		t.Errorf("play = %+v", got)
 	}
-	drive(m, tea.KeyPressMsg{Code: tea.KeyTab}, press("enter"))
+	// G on Top tracks loads no albums; on the Albums tab it pages.
+	drive(m, press("G"))
+	if e.cat.count("albums:8847") != 1 {
+		t.Error("albums paged from the Top tracks tab")
+	}
+	drive(m, tea.KeyPressMsg{Code: tea.KeyTab}, press("G"))
+	if v.active != partAlbums || e.cat.count("albums:8847") != 2 || len(albumsTab.entries) != 21 {
+		t.Fatalf("album paging: active %d entries %d calls %v", v.active, len(albumsTab.entries), e.cat.calls)
+	}
+	drive(m, press("g"), press("enter"))
 	if al, ok := m.current().(*TrackListView); !ok || al.Title() != "Album 00" {
 		t.Errorf("opened %T", m.current())
 	}
 	drive(m, press("h"))
-	drive(m, tea.MouseClickMsg{X: m.layout.Main.X + 2, Y: m.layout.Main.Y + 3, Button: tea.MouseLeft})
-	if en, _ := v.list.selected(); en.track.ID != "1" {
-		t.Errorf("click selected %s", describe(en))
+	m.notice = "" // the play notice above
+	if hints := ansi.Strip(m.hintLine(300)); !strings.HasPrefix(hints, " tab next tab · j/k move · h back") {
+		t.Errorf("hints = %q", hints)
 	}
-	if v.Title() != "Daft Punk" || v.Capturing() || len(v.Bindings()) != 8 {
-		t.Error("view metadata")
+	// Tabs wrap both ways; each keeps its cursor.
+	drive(m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	if v.active != partTracks || tracks.Cursor() != 1 {
+		t.Errorf("shift+tab: active %d cursor %d", v.active, tracks.Cursor())
+	}
+	drive(m, tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	if v.active != partAlbums {
+		t.Error("shift+tab did not wrap")
+	}
+	// Clicks: a tab name selects it; the separator does nothing; a row selects.
+	main := m.layout.Main
+	drive(m, tea.MouseClickMsg{X: main.X + 1 + 3, Y: main.Y + 1, Button: tea.MouseLeft}) // " Top tracks "
+	if v.active != partTracks {
+		t.Fatalf("tab click: active %d", v.active)
+	}
+	drive(m, tea.MouseClickMsg{X: main.X + 1 + 50, Y: main.Y + 1, Button: tea.MouseLeft})
+	drive(m, tea.MouseClickMsg{X: main.X + 2, Y: main.Y + 2, Button: tea.MouseLeft})
+	if v.active != partTracks || tracks.Cursor() != 1 {
+		t.Errorf("stray clicks changed the view: active %d cursor %d", v.active, tracks.Cursor())
+	}
+	drive(m, tea.MouseClickMsg{X: main.X + 2, Y: main.Y + 3, Button: tea.MouseLeft})
+	if en, _ := tracks.selected(); en.track.ID != "1" {
+		t.Errorf("row click selected %s", describe(en))
+	}
+	if v.Title() != "Daft Punk" || v.Capturing() || len(v.Bindings()) != 8 || v.LeadHints() != 1 {
+		t.Errorf("view metadata: %d bindings", len(v.Bindings()))
 	}
 }
 
 func TestArtistViewOrderAndErrors(t *testing.T) {
 	e := newEnv(t)
-	e.cat.albums["8847"] = []tidal.Page[tidal.Album]{{Items: []tidal.Album{aDisc, aRAM}}}
 	v := NewArtistView(e.svc, arDaft)
-	// Albums arrive first and the user selects one; then the tracks arrive
-	// above them and the selection follows the album.
+	// Albums arrive first and the user moves in them; tracks arriving
+	// later add a tab but leave the shown tab and its cursor alone.
 	v.Update(pageMsg[tidal.Album]{part: partAlbums, page: tidal.Page[tidal.Album]{Items: []tidal.Album{aDisc, aRAM}}})
-	v.list.Move(1)
+	if v.LeadHints() != 0 || len(v.Bindings()) != 6 {
+		t.Errorf("one tab: lead %d bindings %d", v.LeadHints(), len(v.Bindings()))
+	}
+	v.Update(press("j"))
 	v.Update(pageMsg[tidal.Track]{part: partTracks, page: tidal.Page[tidal.Track]{Items: []tidal.Track{tOneMore, tHarder}}})
-	if en, _ := v.list.selected(); en.album.ID != aRAM.ID {
+	if en, _ := v.lists[v.active].selected(); v.active != partAlbums || en.album.ID != aRAM.ID {
 		t.Errorf("selection moved to %s", describe(en))
+	}
+	if titles, cur := v.tabTitles(); strings.Join(titles, ",") != "Top tracks,Albums" || cur != 1 {
+		t.Errorf("tabs %q cur %d", titles, cur)
+	}
+	// An artist with no top tracks gets no Top tracks tab.
+	e2 := newEnv(t)
+	e2.cat.albums["8847"] = []tidal.Page[tidal.Album]{{Items: []tidal.Album{aDisc}}}
+	m2 := e2.model(80, 24)
+	only := NewArtistView(e2.svc, arDaft)
+	drive(m2, PushMsg{View: only})
+	if titles, _ := only.tabTitles(); strings.Join(titles, ",") != "Albums" {
+		t.Errorf("tabs = %q", titles)
+	}
+	drive(m2, tea.KeyPressMsg{Code: tea.KeyTab})
+	if only.active != partAlbums {
+		t.Error("tab with one tab moved off it")
 	}
 
 	tests := []struct {
@@ -923,7 +971,7 @@ func TestResultsRouteToTheirView(t *testing.T) {
 	}
 	// A response for a view that was closed is dropped.
 	closed := NewAlbumView(e.svc, aDisc)
-	drive(m, ForViewMsg{View: closed, Msg: pageMsg[entry]{page: tidal.Page[entry]{Items: trackEntries([]tidal.Track{tOneMore}, 0)}}})
+	drive(m, ForViewMsg{View: closed, Msg: pageMsg[entry]{page: tidal.Page[entry]{Items: trackEntries([]tidal.Track{tOneMore})}}})
 	if len(closed.list.entries) != 0 {
 		t.Error("closed view received a message")
 	}
@@ -988,7 +1036,6 @@ func TestRowLayout(t *testing.T) {
 		{"artist", entry{kind: entryArtist, artist: arDaft}, 50, "  Daft Punk"},
 		{"playlist", entry{kind: entryPlaylist, playlist: tidal.Playlist{Name: "Mine", Tracks: 1}}, 50,
 			"  Mine                                1 track     "},
-		{"heading", headingEntry("Tracks", 0), 50, "TRACKS"},
 		{"unknown", entry{kind: 99}, 50, ""},
 		{"control chars", entry{kind: entryArtist, artist: tidal.Artist{Name: "a\x1b[31mb"}}, 50, "  a\x1b[31mb"},
 	}
@@ -1053,7 +1100,7 @@ func TestServicesDefaults(t *testing.T) {
 func TestFailedPageIsNotRetried(t *testing.T) {
 	e := newEnv(t)
 	v := NewPlaylistView(e.svc, pEss)
-	v.Update(pageMsg[entry]{page: tidal.Page[entry]{Items: trackEntries([]tidal.Track{tOneMore}, 0), Next: "p1"}})
+	v.Update(pageMsg[entry]{page: tidal.Page[entry]{Items: trackEntries([]tidal.Track{tOneMore}), Next: "p1"}})
 	if !v.tracks.loading {
 		t.Fatal("near the end of the list the next page was not requested")
 	}
@@ -1144,5 +1191,25 @@ func TestSearchViewSmallStates(t *testing.T) {
 	s.input.SetValue("abc")
 	if s.Update(tea.KeyPressMsg{Code: tea.KeyLeft}); s.typed != 0 {
 		t.Error("a cursor key counted as an edit")
+	}
+}
+
+// A favorite added elsewhere shows its heart on both artist tabs.
+func TestArtistViewFavorites(t *testing.T) {
+	e := newEnv(t)
+	e.cat.pages["artist:8847"] = []tidal.Page[tidal.Track]{{Items: []tidal.Track{tOneMore}}}
+	e.cat.albums["8847"] = []tidal.Page[tidal.Album]{{Items: []tidal.Album{aDisc}}}
+	m := e.model(80, 24)
+	v := NewArtistView(e.svc, arDaft)
+	drive(m, PushMsg{View: v})
+	v.Render(60, 10, true) // lay the rows out before the change
+	e.svc.favs().set(tidal.FavTracks, tOneMore.ID, true)
+	e.svc.favs().set(tidal.FavAlbums, aDisc.ID, true)
+	v.FavoriteChanged(FavoriteMsg{})
+	for _, part := range []int{partTracks, partAlbums} {
+		v.active = part
+		if out := ansi.Strip(v.Render(60, 10, true)); !strings.Contains(out, "♥") {
+			t.Errorf("part %d has no heart:\n%s", part, out)
+		}
 	}
 }

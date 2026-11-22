@@ -187,7 +187,7 @@ func TestLibraryPagingAndSort(t *testing.T) {
 		t.Error("sort label missing")
 	}
 	// A page from before a reload is dropped.
-	stale := libPageMsg{tab: v.active, gen: v.tab().gen - 1, entries: trackEntries([]tidal.Track{tLucky}, 0)}
+	stale := libPageMsg{tab: v.active, gen: v.tab().gen - 1, entries: trackEntries([]tidal.Track{tLucky})}
 	n := len(v.tab().all)
 	v.Update(stale)
 	v.Update(libPageMsg{tab: 9})
@@ -569,7 +569,7 @@ func TestFold(t *testing.T) {
 		t.Error("entryText")
 	}
 	if _, _, _, ok := favRef(entry{}); ok {
-		t.Error("favRef on a heading")
+		t.Error("favRef on an empty entry")
 	}
 	if (&Services{}).favoriteCmd(entry{kind: entryTrack, track: tOneMore}, true) != nil {
 		t.Error("favorite without a Library")

@@ -249,10 +249,10 @@ func (s *SearchView) onResultKey(k tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	switch {
-	case key.Matches(k, Keys.NextGroup):
+	case key.Matches(k, Keys.NextTab):
 		s.active = (s.active + 1) % len(s.tabs)
 		return nil
-	case key.Matches(k, Keys.PrevGroup):
+	case key.Matches(k, Keys.PrevTab):
 		s.active = (s.active - 1 + len(s.tabs)) % len(s.tabs)
 		return nil
 	}
@@ -277,9 +277,9 @@ func resultTabs(svc *Services, r tidal.SearchResults) []*resultTab {
 		title string
 		es    []entry
 	}{
-		{"Tracks", trackEntries(r.Tracks, 0)},
-		{"Albums", albumEntries(r.Albums, 0)},
-		{"Artists", artistEntries(r.Artists, 0)},
+		{"Tracks", trackEntries(r.Tracks)},
+		{"Albums", albumEntries(r.Albums)},
+		{"Artists", artistEntries(r.Artists)},
 		{"Playlists", playlistEntries(r.Playlists)},
 	}
 	var tabs []*resultTab
@@ -311,7 +311,7 @@ func (s *SearchView) Bindings() []key.Binding {
 		key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
 		key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
 	}
-	bs = append(bs, s.tab().list.bindings(false)...)
+	bs = append(bs, s.tab().list.bindings()...)
 	return append(bs, key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")))
 }
 

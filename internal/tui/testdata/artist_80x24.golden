@@ -1,12 +1,12 @@
 ┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
 │ ▸ Search      │ Daft Punk                                                    │
-│   Library     │ ──────────────────────────────────────────────────────────── │
-│   Discovery   │ TOP TRACKS                                                   │
+│   Library     │  Top tracks   Albums                                         │
+│   Discovery   │ ──────────────────────────────────────────────────────────── │
 │   Queue       │   One More Time         Daft Punk      Discovery        5:20 │
 │   Account     │   Get Lucky (feat. Ph…  Daft Punk, P…  Random Acc…      6:09 │
-│               │ ALBUMS                                                       │
-│               │   Discovery                 Daft Punk         2001           │
-│               │   Random Access Memories    Daft Punk         2013           │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
 │               │                                                              │
 │               │                                                              │
 │               │                                                              │
@@ -20,5 +20,5 @@
 │                                                                              │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ j/k move · h back · enter play/open · a add to queue · A play next           │
+│ tab next tab · j/k move · h back · enter play/open · a add to queue          │
 └──────────────────────────────────────────────────────────────────────────────┘
