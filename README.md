@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, and the play queue are in place; the UI and player are not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, and stream selection are in place; the UI and player are not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -48,6 +48,23 @@ To log out and remove stored credentials from both the keyring and the file:
 ```
 
 Until the terminal UI is built, launching tidal-tui logs in if needed, prints the account name, and exits.
+
+## Playback
+
+tidal-tui asks TIDAL for a DASH stream in the formats allowed by the `quality` setting, best first, so TIDAL falls back automatically when a format is unavailable:
+
+| `quality` | Formats requested |
+|---|---|
+| `hires` (default) | FLAC hi-res, FLAC, AAC |
+| `lossless` | FLAC, AAC |
+| `aac` | AAC |
+
+The format TIDAL actually delivers is reported to the player. Dolby Atmos is never requested, because it cannot be played as bit-perfect stereo.
+
+- **Previews** are labeled as previews, with TIDAL's reason (for example, the app's developer access only allows previews). They are never presented as full tracks.
+- **DRM-protected streams** are refused with a clear message. tidal-tui does not decrypt DRM.
+- **Playing on another device** with the same account blocks playback here. tidal-tui tells you to stop it there first.
+- TIDAL's signed stream URLs expire after an hour. tidal-tui fetches a fresh stream when the current one would expire before the track ends, and prefetches the next track in the queue for gapless playback.
 
 ## Configuration
 

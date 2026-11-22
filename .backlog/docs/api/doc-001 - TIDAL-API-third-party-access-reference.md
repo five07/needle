@@ -3,7 +3,7 @@ id: doc-001
 title: TIDAL API third-party access reference
 type: specification
 created_date: '2026-11-22T04:07:57Z'
-updated_date: '2026-11-22T04:52:09Z'
+updated_date: '2026-11-22T05:47:47Z'
 tags:
   - api
   - tidal
@@ -189,3 +189,12 @@ When the MPD is passed as a local file, FFmpeg only allows file protocols, so mp
 The official API works end to end for a legitimate client, with no DRM, but the THIRD_PARTY developer tier only gets previews (`FULL_REQUIRES_HIGHER_ACCESS_TIER`). The `developerAccessTier` enum includes `THIRD_PARTY_PROD`, which is probably the production tier that unlocks full tracks. This is unconfirmed.
 
 Next step, per decision-001: ask TIDAL how a third-party app gets the tier that serves full tracks (likely `THIRD_PARTY_PROD`), and what the requirements are (review, branding, open-source distribution of the client ID). Check the developer dashboard for a production access request first, then contact TIDAL developer support. Until then, development can continue against 30-second previews, which exercise the whole pipeline (manifest, DASH, FLAC hi-res, mpv, bit-perfect output).
+
+## TASK-007 findings (2026-11-22)
+
+- **Signed URL lifetime is 60 minutes.** The `https` manifest URI carries a CloudFront canned signature (`Expires`, `Signature`, `Key-Pair-Id`). Segment URLs inside the MPD carry a CloudFront custom policy (`Policy`, `Signature`, `Key-Pair-Id`) whose `DateLessThan` is also 60 minutes after issue. tidal-tui reads the earliest segment expiry and falls back to 50 minutes when it cannot be read or is implausible against the local clock.
+- With `uriScheme=DATA` the response attributes are `uri`, `formats`, `trackPresentation`, `previewReason`, `hash`, `trackAudioNormalizationData`, `albumAudioNormalizationData`. `drmData` was absent.
+- The MPD Representation has `audioSamplingRate` (for example `192000`) and an undocumented id of the form `FLAC_HIRES,192000,24`. Bit depth is not otherwise exposed, so the player reads it from the decoded stream.
+- While the account plays on another device, every manifest request returns 403 `CONCURRENT_PLAYBACK` ("Account is playing on another app or device"), for all formats.
+- A nonexistent track ID returns 404 with code `CONTENT_NOT_FOUND`.
+- Tracks longer than about 58 minutes cannot finish on one set of signed URLs; the player must re-resolve and resume mid-track (TASK-008).
