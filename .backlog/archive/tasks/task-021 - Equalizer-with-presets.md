@@ -2,8 +2,10 @@
 id: TASK-021
 title: Equalizer with presets
 status: To Do
-assignee: []
+assignee:
+  - '@claude'
 created_date: '2026-11-22T06:54:53Z'
+updated_date: '2026-11-22T20:54:20Z'
 labels:
   - player
   - post-mvp
@@ -37,3 +39,9 @@ PLAN.md New Items 4: an equalizer with presets. Any EQ changes the samples, so i
 - [ ] #7 Only dependencies named in the ticket added; no out-of-scope changes
 - [ ] #8 slog logging to $XDG_STATE_HOME/tidal-tui/ with track_id/request_id fields; no tokens logged
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Won't do for now: deferred by the user on 2026-11-22, to be picked up later. Draft questions 96-100 are in PLAN.md under TASK-021.
+<!-- SECTION:NOTES:END -->

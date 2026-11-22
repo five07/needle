@@ -4,6 +4,7 @@ title: Now-playing title at 2x size (OSC 66)
 status: To Do
 assignee: []
 created_date: '2026-11-22T16:37:17Z'
+updated_date: '2026-11-22T20:52:15Z'
 labels:
   - tui
 dependencies:
@@ -35,3 +36,9 @@ Decision 47: TASK-013 draws the title bold on 2 rows. Charm's cell renderer drop
 - [ ] #7 Only dependencies named in the ticket added; no out-of-scope changes
 - [ ] #8 slog logging to $XDG_STATE_HOME/tidal-tui/ with track_id/request_id fields; no tokens logged
 <!-- DOD:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Won't do: canceled by the user on 2026-11-22.
+<!-- SECTION:NOTES:END -->

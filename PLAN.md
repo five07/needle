@@ -586,6 +586,47 @@ These steps belong to you, because they are git or account actions:
     - c) No notice.
     > MS: a
 
+### TASK-021 (equalizer)
+
+mpv starts with `--af=` (no filters) and needle already watches mpv's `af` property: any filter makes the indicator "altered" with the reason "audio filters active" (decision 16). mpv's `af` can be changed while a track plays, with a short glitch as the filter chain restarts, so no engine restart is needed.
+
+96. **How the EQ is applied.**
+    - a) **(Recommended)** A 10-band graphic EQ at the standard octave centers (31, 62, 125, 250, 500 Hz, 1, 2, 4, 8, 16 kHz), built as a chain of ffmpeg `equalizer` (peaking biquad) filters, one per band that is not 0 dB, and set on mpv's `af` property. Turning the EQ off sets `af` back to empty, the same path as today.
+    - b) ffmpeg's `superequalizer` (18 fixed bands). One filter, but its bands are fixed and its gains are linear, not dB.
+    - c) ffmpeg's `firequalizer` (FIR). Smoother curves, but more CPU and added latency.
+    > MS: 
+
+97. **Presets (AC #1).** Values in dB per band (31 Hz to 16 kHz); open to adjustment in review, like the visualizer colors.
+    - a) **(Recommended)** Built-in presets only, in this order:
+      - Bass boost: 6, 5, 4, 2, 0, 0, 0, 0, 0, 0
+      - Treble boost: 0, 0, 0, 0, 0, 0, 2, 4, 5, 6
+      - Vocal: -2, -2, -1, 1, 3, 3, 2, 1, 0, -1
+      - Rock: 4, 3, 2, 0, -1, -1, 0, 2, 3, 4
+      - Pop: -1, 0, 2, 3, 3, 2, 0, -1, -1, -1
+      - Jazz: 3, 2, 1, 2, -1, -1, 0, 1, 2, 3
+      - Classical: 4, 3, 2, 1, 0, 0, 0, 1, 2, 3
+      - Electronic: 4, 3, 1, 0, -2, 1, 0, 1, 3, 4
+      - Loudness: 5, 4, 1, 0, -1, 0, 0, 1, 4, 5
+    - b) As (a), plus a `custom` preset from `[equalizer] custom = [10 gains]` in `config.toml`, validated at startup (each gain -12 to +12 dB, exactly 10 values), offered only when set. This mirrors `visualizer.custom`.
+    - c) As (b), but any number of named presets in `config.toml`.
+    > MS: 
+
+98. **Clipping.** Boosting a band can push full-scale samples over 0 dBFS, which clips.
+    - a) **(Recommended)** Automatic preamp: the chain starts with a `volume` filter that lowers the signal by the preset's largest boost (Bass boost: -6 dB), so the EQ never clips. Presets sound a little quieter than EQ off.
+    - b) No preamp. Louder, but loud masters can clip.
+    > MS: 
+
+99. **Turning it on and choosing a preset (AC #1).**
+    - a) **(Recommended)** Two Settings rows: "Equalizer" (on/off, `enter` toggles) and "EQ preset" (`enter` cycles), saved to `[equalizer] enabled` and `preset` in `config.toml` with the debounce of decision 76, applied at once. Plus a global `e` key that toggles the EQ for the session only, like `v` and `c` (decision 77), with a notice "Equalizer on: Rock" / "Equalizer off". Defaults: off, preset Bass boost.
+    - b) Settings rows only, no key.
+    - c) As (a), and `E` cycles the preset from anywhere, also session only.
+    > MS: 
+
+100. **The visualizer with the EQ on.** The visualizer's second mpv decodes the stream on its own (decision 67).
+    - a) **(Recommended)** Leave it as it is: the bars show the source, not the EQ. Nothing in the visualizer changes.
+    - b) Apply the same EQ chain in the visualizer's mpv, so the bars show what you hear. Every preset change also resyncs the visualizer.
+    > MS: 
+
 ## DECISIONS
 
 These are the answers to the questions above. Backlog tasks are written to match them.
