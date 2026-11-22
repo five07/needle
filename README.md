@@ -24,11 +24,41 @@ go build -o tidal-tui ./cmd/tidal-tui
 ./tidal-tui --version
 ```
 
-Release builds stamp the version at link time:
+Release builds stamp the version and the TIDAL client ID at link time:
 
 ```sh
-go build -ldflags "-X main.version=v0.1.0" -o tidal-tui ./cmd/tidal-tui
+go build -ldflags "-X main.version=v0.1.0 -X github.com/five07/tidal-tui/internal/config.DefaultClientID=<client-id>" \
+  -o tidal-tui ./cmd/tidal-tui
 ```
+
+The client ID is not stored in the source. Without a build-time ID, set `TIDAL_CLIENT_ID` in the environment or `auth.client_id` in the config file.
+
+## Configuration
+
+tidal-tui reads `$XDG_CONFIG_HOME/tidal-tui/config.toml` (default `~/.config/tidal-tui/config.toml`). The file is optional and every key has a default:
+
+```toml
+# Stream quality: "aac", "lossless", or "hires".
+quality = "hires"
+
+[audio]
+# "shared" plays through PipeWire. "exclusive" opens the device directly
+# for bit-perfect output, blocking other apps while playing.
+mode = "shared"
+# mpv audio device name, or "auto" for the system default.
+device = "auto"
+
+[auth]
+# TIDAL developer app client ID. Overrides TIDAL_CLIENT_ID and the
+# build-time default. Letters, digits, ".", "_" and "-" only.
+# client_id = ""
+```
+
+Unknown keys and invalid values stop startup with an error that names the key.
+
+The client ID is chosen in this order: `auth.client_id` in the config file, then the `TIDAL_CLIENT_ID` environment variable, then the build-time default.
+
+Logs are written to `$XDG_STATE_HOME/tidal-tui/tidal-tui.log` (default `~/.local/state/tidal-tui/tidal-tui.log`). The directory is created with mode `0700` and the file with mode `0600`. Tokens are never logged.
 
 ## Development
 
@@ -47,6 +77,13 @@ Tasks, docs, and decisions are tracked with [Backlog.md](https://github.com/MrLe
 ### TIDAL credentials
 
 Developers need their own TIDAL developer app (https://developer.tidal.com) with the redirect URI `http://127.0.0.1:8765/callback`. Copy `.env.example` to `.env` and fill in the client ID. `.env` is git-ignored; never commit it.
+
+The app does not read `.env` itself. Export it into your shell for development runs:
+
+```sh
+set -a; . ./.env; set +a
+go run ./cmd/tidal-tui
+```
 
 ### API spike tool
 
