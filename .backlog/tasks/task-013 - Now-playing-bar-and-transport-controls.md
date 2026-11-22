@@ -26,7 +26,7 @@ PLAN.md requires showing title, artist, and bit depth/quality, plus play, pause,
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Bar shows title, artist, album, elapsed/total time, and a progress indicator (display only, no seeking)
+- [ ] #1 Bar shows title, artist, album, elapsed/total time, and a progress indicator (display only, no seeking). The song title should be 2x font size. If the player view is not wide enough, the title should scroll across the view endlessly.
 - [ ] #2 Bar shows the received format with bit depth and sample rate read from the stream (for example FLAC 24/192), and flags when output format differs from source
 - [ ] #3 Bar shows shuffle and repeat state
 - [ ] #4 Keys: space toggles play/pause, n/] next track, p/[ previous track, s shuffle, r cycles repeat
