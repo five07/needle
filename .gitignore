@@ -1,0 +1,26 @@
+# Secrets and local credentials
+.env
+.env.*
+!.env.example
+*.token
+*.tokens.json
+tokens.json
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# Build output
+/tidal-tui
+/bin/
+/dist/
+
+# Go test and coverage artifacts
+*.test
+*.out
+coverage.*
+
+# Editor and OS files
+.idea/
+.vscode/
+*.swp
+.DS_Store
