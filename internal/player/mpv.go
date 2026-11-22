@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
+	"github.com/five07/needle/internal/config"
 )
 
 // MPVConfig configures the mpv engine.
@@ -58,7 +58,7 @@ func mpvArgs(mode config.AudioMode, device, socket string) []string {
 		"--input-ipc-server=" + socket,
 		"--gapless-audio=weak", "--prefetch-playlist=yes",
 		"--volume=100", "--volume-max=100", "--replaygain=no", "--af=",
-		"--audio-display=no", "--audio-client-name=tidal-tui",
+		"--audio-display=no", "--audio-client-name=needle",
 		// The MPD is a local file; its segments are absolute https URLs.
 		"--demuxer-lavf-o=protocol_whitelist=[file,http,https,tls,tcp,crypto,data]",
 	}

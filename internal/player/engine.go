@@ -7,7 +7,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // Engine errors callers branch on.

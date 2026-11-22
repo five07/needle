@@ -1,4 +1,4 @@
-module github.com/five07/tidal-tui
+module github.com/five07/needle
 
 go 1.27
 

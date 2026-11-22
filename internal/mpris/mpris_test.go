@@ -122,7 +122,7 @@ func TestRegistersAndExposesInterfaces(t *testing.T) {
 		iface, name string
 		want        any
 	}{
-		{ifaceRoot, "Identity", "tidal-tui"},
+		{ifaceRoot, "Identity", "needle"},
 		{ifaceRoot, "CanQuit", false},
 		{ifaceRoot, "CanRaise", false},
 		{ifaceRoot, "HasTrackList", false},

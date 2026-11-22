@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 func apiErr(status int, code string) error {

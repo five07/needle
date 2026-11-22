@@ -17,7 +17,7 @@ var ErrNoCredentials = errors.New("auth: no stored credentials")
 
 // Keyring entry names.
 const (
-	keyringService = "tidal-tui"
+	keyringService = "needle"
 	keyringUser    = "tidal-account"
 )
 

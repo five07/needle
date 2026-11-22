@@ -21,7 +21,7 @@ import (
 const (
 	// BusName is the well-known name the player asks for. A second running
 	// copy uses BusName + ".instance<pid>".
-	BusName    = "org.mpris.MediaPlayer2.tidal-tui"
+	BusName    = "org.mpris.MediaPlayer2.needle"
 	ObjectPath = dbus.ObjectPath("/org/mpris/MediaPlayer2")
 
 	ifaceRoot   = "org.mpris.MediaPlayer2"
@@ -30,7 +30,7 @@ const (
 	// noTrack is the track ID MPRIS reserves for "no track".
 	noTrack = dbus.ObjectPath("/org/mpris/MediaPlayer2/TrackList/NoTrack")
 	// trackPrefix starts the object path that identifies a queue entry.
-	trackPrefix = "/org/mpris/MediaPlayer2/tidaltui/track/"
+	trackPrefix = "/org/mpris/MediaPlayer2/needle/track/"
 )
 
 // callTimeout bounds one control call from the bus.
@@ -179,7 +179,7 @@ func (s *Service) propMap() prop.Map {
 			"CanQuit":             ro(false),
 			"CanRaise":            ro(false),
 			"HasTrackList":        ro(false),
-			"Identity":            ro("tidal-tui"),
+			"Identity":            ro("needle"),
 			"SupportedUriSchemes": ro([]string{}),
 			"SupportedMimeTypes":  ro([]string{}),
 		},

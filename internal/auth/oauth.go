@@ -31,7 +31,7 @@ const (
 	CallbackPath = "/callback"
 )
 
-// DefaultScopes are the THIRD_PARTY scopes tidal-tui requests.
+// DefaultScopes are the THIRD_PARTY scopes needle requests.
 var DefaultScopes = []string{
 	"collection.read", "collection.write", "entitlements.read", "playback",
 	"playlists.read", "playlists.write", "recommendations.read",
@@ -206,7 +206,7 @@ func (o *OAuth) callbackHandler(state string, results chan<- callbackResult) htt
 		}
 		p := r.URL.Query()
 		if subtle.ConstantTimeCompare([]byte(p.Get("state")), []byte(state)) != 1 {
-			http.Error(w, "tidal-tui: unexpected login callback", http.StatusBadRequest)
+			http.Error(w, "needle: unexpected login callback", http.StatusBadRequest)
 			return
 		}
 		var res callbackResult
@@ -220,9 +220,9 @@ func (o *OAuth) callbackHandler(state string, results chan<- callbackResult) htt
 		}
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		if res.err != nil {
-			fmt.Fprintln(w, "tidal-tui: login failed. Return to the terminal for details.")
+			fmt.Fprintln(w, "needle: login failed. Return to the terminal for details.")
 		} else {
-			fmt.Fprintln(w, "tidal-tui: login complete. You can close this tab.")
+			fmt.Fprintln(w, "needle: login complete. You can close this tab.")
 		}
 		select {
 		case results <- res:

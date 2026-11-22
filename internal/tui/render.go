@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	appName   = "tidal-tui"
+	appName   = "needle"
 	headerKey = " ? help ─ q quit "
 )
 

@@ -9,18 +9,18 @@ import (
 	"syscall"
 )
 
-// configureProcess makes the kernel stop mpv if tidal-tui dies, so a crash
+// configureProcess makes the kernel stop mpv if needle dies, so a crash
 // never leaves an orphaned player holding the audio device.
 func configureProcess(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Pdeathsig: syscall.SIGTERM}
 }
 
 // privateDir returns a directory only this user can access, for the IPC
-// socket and manifest files. It prefers $XDG_RUNTIME_DIR/tidal-tui and falls
+// socket and manifest files. It prefers $XDG_RUNTIME_DIR/needle and falls
 // back to a new temporary directory (owned=true: remove it on Close).
 func privateDir(getenv func(string) string) (dir string, owned bool, err error) {
 	if rd := getenv("XDG_RUNTIME_DIR"); filepath.IsAbs(rd) {
-		dir = filepath.Join(rd, "tidal-tui")
+		dir = filepath.Join(rd, "needle")
 		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return "", false, fmt.Errorf("player: create runtime dir: %w", err)
 		}
@@ -29,7 +29,7 @@ func privateDir(getenv func(string) string) (dir string, owned bool, err error) 
 		}
 		return dir, false, nil
 	}
-	dir, err = os.MkdirTemp("", "tidal-tui-")
+	dir, err = os.MkdirTemp("", "needle-")
 	if err != nil {
 		return "", false, fmt.Errorf("player: create runtime dir: %w", err)
 	}

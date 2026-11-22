@@ -6,10 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/queue"
-	"github.com/five07/tidal-tui/internal/stream"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/queue"
+	"github.com/five07/needle/internal/stream"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // Track is a queued track.
@@ -525,7 +525,7 @@ func Message(err error) string {
 	case errors.Is(err, ErrDeviceBusy):
 		return "The DAC is in use by another app. Stop it there, or set audio.mode to shared."
 	case errors.Is(err, ErrOutputFailed):
-		return "The audio output could not be opened. Check audio.device (run tidal-tui -list-devices)."
+		return "The audio output could not be opened. Check audio.device (run needle -list-devices)."
 	case errors.Is(err, ErrStreamFailed):
 		return "The stream stopped. Try playing the track again."
 	case errors.Is(err, ErrEngineFailed), errors.Is(err, ErrIPCClosed):

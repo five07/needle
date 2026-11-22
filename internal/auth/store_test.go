@@ -68,7 +68,7 @@ func TestKeyringStoreUnavailable(t *testing.T) {
 }
 
 func TestFileStore(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "cfg", "tidal-tui")
+	dir := filepath.Join(t.TempDir(), "cfg", "needle")
 	s := FileStore{Path: filepath.Join(dir, CredentialsFile)}
 
 	if _, err := s.Load(); !errors.Is(err, ErrNoCredentials) {

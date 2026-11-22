@@ -1,4 +1,4 @@
-// Package xdg resolves the per-user directories tidal-tui uses, following the
+// Package xdg resolves the per-user directories needle uses, following the
 // XDG Base Directory specification.
 package xdg
 
@@ -8,7 +8,7 @@ import (
 )
 
 // AppName is the directory name used under each XDG base directory.
-const AppName = "tidal-tui"
+const AppName = "needle"
 
 // ErrNoHome is returned when neither the XDG variable nor HOME is usable.
 var ErrNoHome = errors.New("xdg: HOME is not set and no absolute XDG directory was given")

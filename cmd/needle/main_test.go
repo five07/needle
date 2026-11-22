@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/five07/tidal-tui/internal/player"
+	"github.com/five07/needle/internal/player"
 )
 
 // testEnv returns a getenv backed by temp XDG dirs, plus those dirs.
@@ -29,8 +29,8 @@ func testEnv(t *testing.T, extra map[string]string) (getenv func(string) string,
 		env[k] = v
 	}
 	return func(k string) string { return env[k] },
-		filepath.Join(root, "config", "tidal-tui"),
-		filepath.Join(root, "state", "tidal-tui")
+		filepath.Join(root, "config", "needle"),
+		filepath.Join(root, "state", "needle")
 }
 
 func TestRun(t *testing.T) {
@@ -50,7 +50,7 @@ func TestRun(t *testing.T) {
 			name:       "version flag prints version",
 			args:       []string{"--version"},
 			version:    "v1.2.3",
-			wantStdout: "tidal-tui v1.2.3\n",
+			wantStdout: "needle v1.2.3\nneedle is an independent project and is not affiliated with or endorsed by TIDAL.\n",
 			wantNoLog:  true,
 		},
 		{
@@ -58,7 +58,7 @@ func TestRun(t *testing.T) {
 			args:       []string{"-version"},
 			version:    "dev",
 			env:        map[string]string{"HOME": "", "XDG_CONFIG_HOME": "", "XDG_STATE_HOME": ""},
-			wantStdout: "tidal-tui dev\n",
+			wantStdout: "needle dev\nneedle is an independent project and is not affiliated with or endorsed by TIDAL.\n",
 			wantNoLog:  true,
 		},
 		{
@@ -91,7 +91,7 @@ func TestRun(t *testing.T) {
 		{
 			name:       "help exits zero with usage",
 			args:       []string{"-h"},
-			wantStderr: "Usage: tidal-tui",
+			wantStderr: "Usage: needle",
 			wantNoLog:  true,
 		},
 		{
@@ -140,7 +140,7 @@ func TestRun(t *testing.T) {
 				t.Errorf("stderr = %q, want it to contain %q", stderr.String(), tt.wantStderr)
 			}
 
-			logBytes, err := os.ReadFile(filepath.Join(stateDir, "tidal-tui.log"))
+			logBytes, err := os.ReadFile(filepath.Join(stateDir, "needle.log"))
 			if tt.wantNoLog {
 				if err == nil {
 					t.Errorf("log file written, want none:\n%s", logBytes)
@@ -193,7 +193,7 @@ func TestMainExitCode(t *testing.T) {
 	}{{[]string{"-version"}, 0}, {[]string{"--bogus"}, 2}} {
 		got := -1
 		exit = func(code int) { got = code }
-		os.Args = append([]string{"tidal-tui"}, tt.args...)
+		os.Args = append([]string{"needle"}, tt.args...)
 		main()
 		if got != tt.want {
 			t.Errorf("main %v exit = %d, want %d", tt.args, got, tt.want)

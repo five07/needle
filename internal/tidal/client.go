@@ -121,7 +121,7 @@ func New(tokens TokenSource, opts ...Option) (*Client, error) {
 		base:      base,
 		http:      &http.Client{Timeout: 30 * time.Second},
 		tokens:    tokens,
-		userAgent: "tidal-tui",
+		userAgent: "needle",
 		logger:    slog.New(slog.DiscardHandler),
 		retry:     DefaultRetryPolicy,
 		sleep:     sleepCtx,

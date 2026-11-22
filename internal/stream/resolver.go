@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // FormatsFor maps the quality setting to the formats requested from TIDAL,

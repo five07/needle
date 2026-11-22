@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // discFake implements Discovery on top of fakeCatalog's bookkeeping.
@@ -294,7 +294,7 @@ func TestRadioKey(t *testing.T) {
 		{name: "no radio", setup: func(_ *env, d *discFake) { delete(d.radios, "track:1") },
 			notice: "TIDAL has no radio for One More Time."},
 		{name: "api error", setup: func(_ *env, d *discFake) { d.errs["radio:track:1"] = tidal.ErrUnauthorized },
-			notice: "Could not start radio: Your TIDAL session has ended. Restart tidal-tui to log in again."},
+			notice: "Could not start radio: Your TIDAL session has ended. Restart needle to log in again."},
 		{name: "shutting down", setup: func(e *env, d *discFake) {
 			ctx, cancel := context.WithCancel(context.Background())
 			cancel()

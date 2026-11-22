@@ -8,7 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // Catalog is the read API the views use. *tidal.Catalog implements it.
@@ -142,7 +142,7 @@ func (s *Services) tick(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd {
 func userMessage(err error) string {
 	switch {
 	case errors.Is(err, tidal.ErrUnauthorized):
-		return "Your TIDAL session has ended. Restart tidal-tui to log in again."
+		return "Your TIDAL session has ended. Restart needle to log in again."
 	case errors.Is(err, tidal.ErrRateLimited):
 		return "TIDAL is busy right now. Try again in a moment."
 	case errors.Is(err, tidal.ErrNotFound), errors.Is(err, tidal.ErrInvalidResourceID):

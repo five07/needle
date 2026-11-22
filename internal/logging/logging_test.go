@@ -9,7 +9,7 @@ import (
 )
 
 func TestOpenCreatesPrivateFileAndAppends(t *testing.T) {
-	stateDir := filepath.Join(t.TempDir(), "state", "tidal-tui")
+	stateDir := filepath.Join(t.TempDir(), "state", "needle")
 
 	for i, msg := range []string{"first", "second"} {
 		logger, closer, err := Open(stateDir, slog.LevelInfo)
@@ -86,7 +86,7 @@ func TestOpenErrors(t *testing.T) {
 				if err := os.WriteFile(p, nil, 0o600); err != nil {
 					t.Fatal(err)
 				}
-				return filepath.Join(p, "tidal-tui")
+				return filepath.Join(p, "needle")
 			},
 			want: "create state dir",
 		},

@@ -15,11 +15,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/player"
-	"github.com/five07/tidal-tui/internal/queue"
-	"github.com/five07/tidal-tui/internal/tidal"
-	"github.com/five07/tidal-tui/internal/tui"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/player"
+	"github.com/five07/needle/internal/queue"
+	"github.com/five07/needle/internal/tidal"
+	"github.com/five07/needle/internal/tui"
 )
 
 // stubTransport counts player calls.
@@ -359,7 +359,7 @@ func TestNewUIErrors(t *testing.T) {
 	}
 	// The default engine reports a missing mpv as a typed error.
 	d = defaultDeps
-	_, err = d.newEngine(context.Background(), player.MPVConfig{Binary: "tidal-tui-no-such-mpv"})
+	_, err = d.newEngine(context.Background(), player.MPVConfig{Binary: "needle-no-such-mpv"})
 	if !errors.Is(err, player.ErrMPVNotFound) {
 		t.Errorf("newEngine err = %v", err)
 	}

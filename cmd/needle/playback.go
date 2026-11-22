@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/mpris"
-	"github.com/five07/tidal-tui/internal/player"
-	"github.com/five07/tidal-tui/internal/queue"
-	"github.com/five07/tidal-tui/internal/tidal"
-	"github.com/five07/tidal-tui/internal/tui"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/mpris"
+	"github.com/five07/needle/internal/player"
+	"github.com/five07/needle/internal/queue"
+	"github.com/five07/needle/internal/tidal"
+	"github.com/five07/needle/internal/tui"
 )
 
 // transport is the part of *player.Player that playback drives.

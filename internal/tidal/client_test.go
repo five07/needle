@@ -106,7 +106,7 @@ func (f *fakeAPI) requests() []recorded {
 // newTestClient builds a client against f with recorded, instant sleeps.
 func newTestClient(t *testing.T, f *fakeAPI, tokens *stubTokens, opts ...Option) (*Client, *[]time.Duration) {
 	t.Helper()
-	c, err := New(tokens, append([]Option{WithBaseURL(f.srv.URL + "/v2"), WithUserAgent("tidal-tui/test")}, opts...)...)
+	c, err := New(tokens, append([]Option{WithBaseURL(f.srv.URL + "/v2"), WithUserAgent("needle/test")}, opts...)...)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestGetSendsHeadersAndDecodes(t *testing.T) {
 		"include":       "artist",
 		"Authorization": "Bearer " + tokenA,
 		"Accept":        MediaType,
-		"User-Agent":    "tidal-tui/test",
+		"User-Agent":    "needle/test",
 		"Idempotency":   "",
 		"Content-Type":  "",
 	}

@@ -10,7 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // libFake implements Library on top of fakeCatalog's bookkeeping.

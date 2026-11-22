@@ -9,7 +9,7 @@ import (
 )
 
 // errFailed is the one error MPRIS callers see; details go to the log.
-var errFailed = dbus.NewError("org.freedesktop.DBus.Error.Failed", []any{"tidal-tui: playback control failed"})
+var errFailed = dbus.NewError("org.freedesktop.DBus.Error.Failed", []any{"needle: playback control failed"})
 
 // call runs a control with callTimeout and hides its error details.
 func (s *Service) call(name string, f func(context.Context) error) *dbus.Error {
@@ -62,7 +62,7 @@ func (s *Service) onLoop(ch *prop.Change) *dbus.Error {
 // (decision 57). Returning an error keeps the stored value unchanged.
 func (s *Service) onVolume(ch *prop.Change) *dbus.Error {
 	s.logger.Debug("mpris volume write ignored", "value", ch.Value)
-	return dbus.NewError("org.freedesktop.DBus.Error.NotSupported", []any{"tidal-tui: volume is read-only"})
+	return dbus.NewError("org.freedesktop.DBus.Error.NotSupported", []any{"needle: volume is read-only"})
 }
 
 func introspectMethods(names ...string) []introspect.Method {

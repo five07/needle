@@ -375,7 +375,7 @@ func (m *Model) View() tea.View {
 	v := tea.NewView(m.render())
 	v.AltScreen = true
 	v.MouseMode = tea.MouseModeCellMotion
-	v.WindowTitle = "tidal-tui"
+	v.WindowTitle = "needle"
 	return v
 }
 

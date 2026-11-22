@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/tidal"
 )
 
 var t0 = time.Date(2026, 11, 22, 12, 0, 0, 0, time.UTC)

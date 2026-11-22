@@ -1,6 +1,6 @@
-// Package config loads and validates the tidal-tui configuration file.
+// Package config loads and validates the needle configuration file.
 //
-// The file lives at $XDG_CONFIG_HOME/tidal-tui/config.toml. Every key is
+// The file lives at $XDG_CONFIG_HOME/needle/config.toml. Every key is
 // optional; a missing file means all defaults apply.
 package config
 
@@ -26,7 +26,7 @@ const ClientIDEnv = "TIDAL_CLIENT_ID"
 // file nor the environment provides one. It is empty in source and set at
 // build time:
 //
-//	go build -ldflags "-X github.com/five07/tidal-tui/internal/config.DefaultClientID=<id>"
+//	go build -ldflags "-X github.com/five07/needle/internal/config.DefaultClientID=<id>"
 var DefaultClientID = ""
 
 // Quality is the requested stream quality.
@@ -151,7 +151,7 @@ func (c Config) Validate() error {
 	if c.Audio.Mode == AudioExclusive {
 		if _, _, ok := ParseALSAHW(c.Audio.Device); !ok {
 			return &ValidationError{Key: "audio.device", Reason: fmt.Sprintf(
-				`exclusive mode needs an ALSA hardware device such as "alsa/hw:CARD=Name,DEV=0", not %q (run tidal-tui -list-devices)`,
+				`exclusive mode needs an ALSA hardware device such as "alsa/hw:CARD=Name,DEV=0", not %q (run needle -list-devices)`,
 				c.Audio.Device)}
 		}
 	}

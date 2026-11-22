@@ -5,7 +5,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // favoriteTimeout bounds one favorites write.
@@ -16,7 +16,7 @@ type favKey struct {
 	id string
 }
 
-// favorites is what tidal-tui knows about the user's favorites: items seen
+// favorites is what needle knows about the user's favorites: items seen
 // in a Library list or changed this session (decision 31). Anything else is
 // unknown. Only the UI goroutine uses it.
 type favorites struct {

@@ -585,7 +585,7 @@ func TestNotice(t *testing.T) {
 func TestViewSettingsAndStyles(t *testing.T) {
 	f := newFixture(t, 80, 24)
 	v := f.m.View()
-	if !v.AltScreen || v.MouseMode != tea.MouseModeCellMotion || v.WindowTitle != "tidal-tui" {
+	if !v.AltScreen || v.MouseMode != tea.MouseModeCellMotion || v.WindowTitle != "needle" {
 		t.Errorf("view = %+v", v)
 	}
 	if f.m.Init() != nil {

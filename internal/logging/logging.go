@@ -12,13 +12,13 @@ import (
 )
 
 // FileName is the log file name inside the state directory.
-const FileName = "tidal-tui.log"
+const FileName = "needle.log"
 
 // chmod is a seam so tests can simulate a permission change failure.
 var chmod = (*os.File).Chmod
 
 // Open creates stateDir if needed (mode 0700) and returns a logger that
-// appends to stateDir/tidal-tui.log (mode 0600). The caller must close the
+// appends to stateDir/needle.log (mode 0600). The caller must close the
 // returned io.Closer when done.
 func Open(stateDir string, level slog.Level) (*slog.Logger, io.Closer, error) {
 	if err := os.MkdirAll(stateDir, 0o700); err != nil {

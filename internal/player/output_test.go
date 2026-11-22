@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/tidal"
 )
 
 const hw192 = `access: RW_INTERLEAVED

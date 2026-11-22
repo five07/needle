@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/queue"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/queue"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // fakeEngine records calls; tests push events into it.

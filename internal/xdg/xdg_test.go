@@ -19,27 +19,27 @@ func TestResolve(t *testing.T) {
 		{
 			name: "XDG variables set",
 			env:  map[string]string{"XDG_CONFIG_HOME": "/xdg/config", "XDG_STATE_HOME": "/xdg/state", "HOME": "/home/u"},
-			want: Dirs{Config: "/xdg/config/tidal-tui", State: "/xdg/state/tidal-tui"},
+			want: Dirs{Config: "/xdg/config/needle", State: "/xdg/state/needle"},
 		},
 		{
 			name: "XDG variables unset fall back to HOME",
 			env:  map[string]string{"HOME": "/home/u"},
-			want: Dirs{Config: "/home/u/.config/tidal-tui", State: "/home/u/.local/state/tidal-tui"},
+			want: Dirs{Config: "/home/u/.config/needle", State: "/home/u/.local/state/needle"},
 		},
 		{
 			name: "relative XDG values are ignored",
 			env:  map[string]string{"XDG_CONFIG_HOME": "rel/config", "XDG_STATE_HOME": "./state", "HOME": "/home/u"},
-			want: Dirs{Config: "/home/u/.config/tidal-tui", State: "/home/u/.local/state/tidal-tui"},
+			want: Dirs{Config: "/home/u/.config/needle", State: "/home/u/.local/state/needle"},
 		},
 		{
 			name: "trailing slashes are cleaned",
 			env:  map[string]string{"XDG_CONFIG_HOME": "/xdg/config/", "XDG_STATE_HOME": "/xdg/state//", "HOME": "/home/u"},
-			want: Dirs{Config: "/xdg/config/tidal-tui", State: "/xdg/state/tidal-tui"},
+			want: Dirs{Config: "/xdg/config/needle", State: "/xdg/state/needle"},
 		},
 		{
 			name: "XDG set without HOME",
 			env:  map[string]string{"XDG_CONFIG_HOME": "/c", "XDG_STATE_HOME": "/s"},
-			want: Dirs{Config: "/c/tidal-tui", State: "/s/tidal-tui"},
+			want: Dirs{Config: "/c/needle", State: "/s/needle"},
 		},
 		{
 			name:    "no HOME and no config dir",

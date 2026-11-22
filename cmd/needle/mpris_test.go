@@ -12,10 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/mpris"
-	"github.com/five07/tidal-tui/internal/player"
-	"github.com/five07/tidal-tui/internal/queue"
-	"github.com/five07/tidal-tui/internal/tui"
+	"github.com/five07/needle/internal/mpris"
+	"github.com/five07/needle/internal/player"
+	"github.com/five07/needle/internal/queue"
+	"github.com/five07/needle/internal/tui"
 	"github.com/godbus/dbus/v5"
 )
 

@@ -1,4 +1,4 @@
-// Command tidal-tui is a keyboard-driven terminal client for TIDAL with
+// Command needle is a keyboard-driven terminal client for TIDAL with
 // bit-perfect playback.
 package main
 
@@ -15,21 +15,25 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/five07/tidal-tui/internal/auth"
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/logging"
-	"github.com/five07/tidal-tui/internal/player"
-	"github.com/five07/tidal-tui/internal/queue"
-	"github.com/five07/tidal-tui/internal/stream"
-	"github.com/five07/tidal-tui/internal/tidal"
-	"github.com/five07/tidal-tui/internal/tui"
-	"github.com/five07/tidal-tui/internal/xdg"
+	"github.com/five07/needle/internal/auth"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/logging"
+	"github.com/five07/needle/internal/player"
+	"github.com/five07/needle/internal/queue"
+	"github.com/five07/needle/internal/stream"
+	"github.com/five07/needle/internal/tidal"
+	"github.com/five07/needle/internal/tui"
+	"github.com/five07/needle/internal/xdg"
 	"github.com/godbus/dbus/v5"
 )
 
 // version is the release version, set at build time with
 // -ldflags "-X main.version=v1.2.3".
 var version = "dev"
+
+// affiliation is the notice printed by -version and in the README
+// (decision 39).
+const affiliation = "needle is an independent project and is not affiliated with or endorsed by TIDAL."
 
 // deps holds the collaborators that tests replace: the browser login step and
 // the API endpoint.
@@ -85,13 +89,13 @@ func main() {
 // run parses args and executes the program, returning the process exit code.
 // The environment is read through getenv so tests can control it.
 func run(ctx context.Context, d deps, args []string, getenv func(string) string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("tidal-tui", flag.ContinueOnError)
+	fs := flag.NewFlagSet("needle", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	logout := fs.Bool("logout", false, "remove stored TIDAL credentials and exit")
 	listDevices := fs.Bool("list-devices", false, "list audio devices for audio.device and exit")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Usage: tidal-tui [flags]")
+		fmt.Fprintln(fs.Output(), "Usage: needle [flags]")
 		fmt.Fprintln(fs.Output())
 		fs.PrintDefaults()
 	}
@@ -103,12 +107,12 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "tidal-tui: unexpected argument %q\n", fs.Arg(0))
+		fmt.Fprintf(stderr, "needle: unexpected argument %q\n", fs.Arg(0))
 		fs.Usage()
 		return 2
 	}
 	if *showVersion {
-		fmt.Fprintf(stdout, "tidal-tui %s\n", version)
+		fmt.Fprintf(stdout, "needle %s\n%s\n", version, affiliation)
 		return 0
 	}
 
@@ -118,18 +122,18 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 
 	dirs, err := xdg.Resolve(getenv)
 	if err != nil {
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	configPath := filepath.Join(dirs.Config, config.FileName)
 	cfg, err := config.Load(configPath, getenv)
 	if err != nil {
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	logger, closer, err := logging.Open(dirs.State, slog.LevelInfo)
 	if err != nil {
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	defer closer.Close()
@@ -144,12 +148,12 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	if *logout {
 		if err := auth.DeleteAll(dirs.Config); err != nil {
 			logger.Error("logout failed", "err", err)
-			fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+			fmt.Fprintf(stderr, "needle: %v\n", err)
 			return 1
 		}
 		if err := forgetBestQuality(dirs.State); err != nil {
 			logger.Error("logout failed", "err", err)
-			fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+			fmt.Fprintf(stderr, "needle: %v\n", err)
 			return 1
 		}
 		logger.Info("logged out")
@@ -157,7 +161,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 		return 0
 	}
 	if cfg.Auth.ClientID == "" {
-		fmt.Fprintf(stderr, "tidal-tui: no TIDAL client ID: set auth.client_id in %s or the %s environment variable\n",
+		fmt.Fprintf(stderr, "needle: no TIDAL client ID: set auth.client_id in %s or the %s environment variable\n",
 			configPath, config.ClientIDEnv)
 		return 1
 	}
@@ -165,16 +169,16 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	oauth := d.newOAuth(cfg.Auth.ClientID)
 	store := auth.NewStore(dirs.Config, logger)
 	tokens := auth.NewTokenSource(store, oauth)
-	opts := append([]tidal.Option{tidal.WithLogger(logger), tidal.WithUserAgent("tidal-tui/" + version)}, d.apiOptions...)
+	opts := append([]tidal.Option{tidal.WithLogger(logger), tidal.WithUserAgent("needle/" + version)}, d.apiOptions...)
 	client, err := tidal.New(tokens, opts...)
 	if err != nil {
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	user, err := account(ctx, d, oauth, store, tokens, client, logger, stderr)
 	if err != nil {
 		logger.Error("login failed", "err", err)
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (%s).\n", user.Username, user.Country)
@@ -182,7 +186,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, localeFromEnv(getenv), dirs.State, logger)
 	if err != nil {
 		logger.Error("ui setup failed", "err", err)
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	logger.Info("ui started")
@@ -190,7 +194,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	stopPlayer()
 	if err != nil && ctx.Err() == nil {
 		logger.Error("ui failed", "err", err)
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	logger.Info("ui stopped")
@@ -299,7 +303,7 @@ func account(ctx context.Context, d deps, oauth *auth.OAuth, store auth.Store, t
 func printDevices(ctx context.Context, d deps, stdout, stderr io.Writer) int {
 	exclusive, err := player.ExclusiveDevices(d.asoundRoot)
 	if err != nil {
-		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		fmt.Fprintf(stderr, "needle: %v\n", err)
 		return 1
 	}
 	var shared []player.Device

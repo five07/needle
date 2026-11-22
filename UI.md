@@ -5,7 +5,7 @@ This is how I read the UI from `PLAN.md`, the DECISIONS table, and tasks TASK-00
 ## 1. Main screen at 80x24
 
 ```
-┌ tidal-tui ─────────────────────────────────────────────── ? help ─ q quit ┐
+┌ needle ─────────────────────────────────────────────── ? help ─ q quit ┐
 │ ▸ Search      │ Search: daft punk_                                         │
 │   Library     │────────────────────────────────────────────────────────────│
 │   Discovery   │ TRACKS                                                     │

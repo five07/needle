@@ -1,8 +1,10 @@
-# tidal-tui
+# needle
 
 A keyboard-driven terminal client for [TIDAL](https://tidal.com) with bit-perfect playback, built in Go on the [Charm](https://charm.sh) stack.
 
-tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://developer.tidal.com) with its own registered app, and never uses private endpoints, borrowed credentials, or DRM circumvention.
+needle is a legitimate client: it uses only the [official TIDAL API](https://developer.tidal.com) with its own registered app, and never uses private endpoints, borrowed credentials, or DRM circumvention.
+
+needle is an independent project and is not affiliated with or endorsed by TIDAL.
 
 ## Status
 
@@ -21,34 +23,34 @@ The TIDAL developer access tier this project currently has serves **30-second pr
 ## Build and run
 
 ```sh
-go build -o tidal-tui ./cmd/tidal-tui
-./tidal-tui --version
+go build -o needle ./cmd/needle
+./needle --version
 ```
 
 Release builds stamp the version and the TIDAL client ID at link time:
 
 ```sh
-go build -ldflags "-X main.version=v0.1.0 -X github.com/five07/tidal-tui/internal/config.DefaultClientID=<client-id>" \
-  -o tidal-tui ./cmd/tidal-tui
+go build -ldflags "-X main.version=v0.1.0 -X github.com/five07/needle/internal/config.DefaultClientID=<client-id>" \
+  -o needle ./cmd/needle
 ```
 
 The client ID is not stored in the source. Without a build-time ID, set `TIDAL_CLIENT_ID` in the environment or `auth.client_id` in the config file.
 
 ## Login
 
-On the first launch tidal-tui prints a TIDAL login URL and opens it in your browser (via `xdg-open`). After you approve access, TIDAL redirects to `http://127.0.0.1:8765/callback`, where tidal-tui listens on the loopback interface only, for one callback, for up to five minutes. The login uses OAuth 2 with PKCE, so no client secret is needed. Port 8765 must be free during login, because it is the redirect URI registered for the app.
+On the first launch needle prints a TIDAL login URL and opens it in your browser (via `xdg-open`). After you approve access, TIDAL redirects to `http://127.0.0.1:8765/callback`, where needle listens on the loopback interface only, for one callback, for up to five minutes. The login uses OAuth 2 with PKCE, so no client secret is needed. Port 8765 must be free during login, because it is the redirect URI registered for the app.
 
-Tokens are kept in the system keyring through the Secret Service API (GNOME Keyring, KWallet, KeePassXC). When no keyring is reachable, tidal-tui stores them in `$XDG_CONFIG_HOME/tidal-tui/credentials.json` with mode `0600` instead, logs a warning, and refuses to read that file if other users can access it. Only one account is stored; logging in again replaces it.
+Tokens are kept in the system keyring through the Secret Service API (GNOME Keyring, KWallet, KeePassXC). When no keyring is reachable, needle stores them in `$XDG_CONFIG_HOME/needle/credentials.json` with mode `0600` instead, logs a warning, and refuses to read that file if other users can access it. Only one account is stored; logging in again replaces it.
 
-Access tokens refresh automatically. If TIDAL revokes the session, tidal-tui asks you to log in again.
+Access tokens refresh automatically. If TIDAL revokes the session, needle asks you to log in again.
 
 To log out and remove stored credentials from both the keyring and the file (this also forgets the highest quality shown in the Account view):
 
 ```sh
-./tidal-tui -logout
+./needle -logout
 ```
 
-After login, tidal-tui prints the account name and opens the terminal UI.
+After login, needle prints the account name and opens the terminal UI.
 
 ## Using the terminal UI
 
@@ -105,7 +107,7 @@ The Library has four tabs: **Playlists** (the ones you own and the ones you adde
 
 - **`o`** cycles the server-side sort of the tab (date added, title or name, and artist for albums and tracks) and reloads it.
 - **`/`** filters the current tab by title, artist, and album, ignoring case and accents. While a filter is set, the rest of the tab loads in the background so the filter covers all of it, up to 5000 items (a notice says when it stops there). `enter` keeps the filter and returns to the list; `esc` clears it.
-- **`f` / `F`** work in every view. TIDAL has no way to ask whether one item is a favorite, so a `♥` marks only items tidal-tui knows about: ones loaded in the Library or favorited this session. Removing a favorite in the Library drops its row; adding one elsewhere reloads the matching tab.
+- **`f` / `F`** work in every view. TIDAL has no way to ask whether one item is a favorite, so a `♥` marks only items needle knows about: ones loaded in the Library or favorited this session. Removing a favorite in the Library drops its row; adding one elsewhere reloads the matching tab.
 - **`+`** on a track opens a list of the playlists you own. `enter` adds the track to the selected one and `esc` cancels. A track already in that playlist is not added twice.
 
 ### Discovery
@@ -139,7 +141,7 @@ The Queue section lists the track that is playing, then the tracks still to come
 
 ### Account
 
-The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/tidal-tui/best_quality.json`. Below that are your `quality`, audio mode, and audio device settings, read-only; change them in `config.toml` and restart.
+The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/needle/best_quality.json`. Below that are your `quality`, audio mode, and audio device settings, read-only; change them in `config.toml` and restart.
 
 ### Mouse
 
@@ -147,7 +149,7 @@ Click a sidebar section to switch to it, or a row to select it. Double-click ope
 
 ## Playback
 
-tidal-tui asks TIDAL for a DASH stream in the formats allowed by the `quality` setting, best first, so TIDAL falls back automatically when a format is unavailable:
+needle asks TIDAL for a DASH stream in the formats allowed by the `quality` setting, best first, so TIDAL falls back automatically when a format is unavailable:
 
 | `quality` | Formats requested |
 |---|---|
@@ -158,30 +160,30 @@ tidal-tui asks TIDAL for a DASH stream in the formats allowed by the `quality` s
 The format TIDAL actually delivers is reported to the player. Dolby Atmos is never requested, because it cannot be played as bit-perfect stereo.
 
 - **Previews** are labeled as previews, with TIDAL's reason (for example, the app's developer access only allows previews). They are never presented as full tracks.
-- **DRM-protected streams** are refused with a clear message. tidal-tui does not decrypt DRM.
-- **Playing on another device** with the same account blocks playback here. tidal-tui tells you to stop it there first.
-- TIDAL's signed stream URLs expire after an hour. tidal-tui fetches a fresh stream when the current one would expire before the track ends, and prefetches the next track in the queue for gapless playback.
+- **DRM-protected streams** are refused with a clear message. needle does not decrypt DRM.
+- **Playing on another device** with the same account blocks playback here. needle tells you to stop it there first.
+- TIDAL's signed stream URLs expire after an hour. needle fetches a fresh stream when the current one would expire before the track ends, and prefetches the next track in the queue for gapless playback.
 
 ## Audio output
 
-tidal-tui plays through mpv, run as a private subprocess controlled over a JSON IPC socket in `$XDG_RUNTIME_DIR/tidal-tui/` (mode `0700`). Stream manifests are written there with mode `0600` and deleted after use, so signed URLs never appear on a command line. mpv runs with `--no-config`, so your own mpv settings cannot change the output.
+needle plays through mpv, run as a private subprocess controlled over a JSON IPC socket in `$XDG_RUNTIME_DIR/needle/` (mode `0700`). Stream manifests are written there with mode `0600` and deleted after use, so signed URLs never appear on a command line. mpv runs with `--no-config`, so your own mpv settings cannot change the output.
 
 There are two output modes, set with `audio.mode`:
 
 - **`shared`** (default) plays through PipeWire, alongside other apps. PipeWire switches the device to the track's sample rate when nothing else is playing; if another app holds the device at a different rate, PipeWire resamples.
-- **`exclusive`** opens an ALSA hardware device directly, so samples reach the DAC unchanged. Other apps cannot use the device while tidal-tui plays, and if another app is already using it, playback stops with an error instead of quietly falling back to shared mode. Exclusive mode needs an explicit device (`auto` is rejected at startup).
+- **`exclusive`** opens an ALSA hardware device directly, so samples reach the DAC unchanged. Other apps cannot use the device while needle plays, and if another app is already using it, playback stops with an error instead of quietly falling back to shared mode. Exclusive mode needs an explicit device (`auto` is rejected at startup).
 
 To see the device names for `audio.device`:
 
 ```sh
-./tidal-tui -list-devices
+./needle -list-devices
 ```
 
 Exclusive mode needs an `alsa/hw:CARD=<name>,DEV=<n>` device from the first list. Devices that are not USB are flagged as built-in: on some laptops (for example Apple Silicon Macs running Asahi Linux) the built-in device drives the speakers without any protection, so do not use it in exclusive mode. Shared mode takes `auto` or a `pipewire/<sink>` name from the second list.
 
 ### Bit-perfect indicator
 
-tidal-tui compares the source format with what the sound card is actually running, read from `/proc/asound`, not just what mpv reports. The indicator has three states:
+needle compares the source format with what the sound card is actually running, read from `/proc/asound`, not just what mpv reports. The indicator has three states:
 
 | State | Meaning |
 |---|---|
@@ -197,11 +199,11 @@ In exclusive mode software volume is disabled: set the volume on your DAC or amp
 
 ### Gapless playback
 
-The next track in the queue is fetched about 45 seconds before the current one ends and handed to mpv in advance. Consecutive tracks with the same format play without a gap. When the format changes (for example 44.1 kHz to 96 kHz), the device is reopened at the new rate, which leaves a short gap; tidal-tui never resamples to avoid it. Repeat-one replays the track without preloading.
+The next track in the queue is fetched about 45 seconds before the current one ends and handed to mpv in advance. Consecutive tracks with the same format play without a gap. When the format changes (for example 44.1 kHz to 96 kHz), the device is reopened at the new rate, which leaves a short gap; needle never resamples to avoid it. Repeat-one replays the track without preloading.
 
 ### Errors
 
-A missing mpv, a busy device, an output that cannot be opened, or an mpv crash stops playback with a message instead of hanging. If a stream breaks mid-track (usually because its signed links expired), tidal-tui fetches a fresh stream once and resumes from the same position.
+A missing mpv, a busy device, an output that cannot be opened, or an mpv crash stops playback with a message instead of hanging. If a stream breaks mid-track (usually because its signed links expired), needle fetches a fresh stream once and resumes from the same position.
 
 ### Quitting
 
@@ -209,22 +211,22 @@ Quitting while a track plays fades the output to silence first (about 100 ms), t
 
 ## Desktop integration (MPRIS)
 
-While it runs, tidal-tui appears on the D-Bus session bus as `org.mpris.MediaPlayer2.tidal-tui` (a second copy adds `.instance<pid>`), so media keys, `playerctl`, and bar widgets such as Waybar's `mpris` module and omarchy-shell can show and control it:
+While it runs, needle appears on the D-Bus session bus as `org.mpris.MediaPlayer2.needle` (a second copy adds `.instance<pid>`), so media keys, `playerctl`, and bar widgets such as Waybar's `mpris` module and omarchy-shell can show and control it:
 
 - **Shown:** title, artists, album, length, the TIDAL track link, playing/paused/stopped, shuffle, and repeat (`None`, `Track`, or `Playlist`), updated as they change.
 - **Controls:** play, pause, play/pause, stop, next, previous, and setting shuffle and repeat.
 - **Not supported:** seeking (`CanSeek` is false), changing the volume (reported, but read-only until volume control is decided), album art, and raising or quitting the app.
 
-Without a session bus (for example over SSH), tidal-tui logs a warning and runs without desktop integration. Try it with:
+Without a session bus (for example over SSH), needle logs a warning and runs without desktop integration. Try it with:
 
 ```sh
-playerctl -p tidal-tui metadata
-playerctl -p tidal-tui play-pause
+playerctl -p needle metadata
+playerctl -p needle play-pause
 ```
 
 ## Configuration
 
-tidal-tui reads `$XDG_CONFIG_HOME/tidal-tui/config.toml` (default `~/.config/tidal-tui/config.toml`). The file is optional and every key has a default:
+needle reads `$XDG_CONFIG_HOME/needle/config.toml` (default `~/.config/needle/config.toml`). The file is optional and every key has a default:
 
 ```toml
 # Stream quality: "aac", "lossless", or "hires".
@@ -234,7 +236,7 @@ quality = "hires"
 # "shared" plays through PipeWire. "exclusive" opens the device directly
 # for bit-perfect output, blocking other apps while playing.
 mode = "shared"
-# mpv audio device name (see tidal-tui -list-devices). Shared mode: "auto"
+# mpv audio device name (see needle -list-devices). Shared mode: "auto"
 # or "pipewire/<sink>". Exclusive mode: "alsa/hw:CARD=<name>,DEV=<n>".
 device = "auto"
 
@@ -248,14 +250,14 @@ Unknown keys and invalid values stop startup with an error that names the key.
 
 The client ID is chosen in this order: `auth.client_id` in the config file, then the `TIDAL_CLIENT_ID` environment variable, then the build-time default.
 
-Logs are written to `$XDG_STATE_HOME/tidal-tui/tidal-tui.log` (default `~/.local/state/tidal-tui/tidal-tui.log`). The directory is created with mode `0700` and the file with mode `0600`. Tokens are never logged.
+Logs are written to `$XDG_STATE_HOME/needle/needle.log` (default `~/.local/state/needle/needle.log`). The directory is created with mode `0700` and the file with mode `0600`. Tokens are never logged.
 
 ## Development
 
 | Task | Command |
 |---|---|
 | Run tests (with race detector) | `go test -race ./...` |
-| Coverage for a package | `go test -cover ./cmd/tidal-tui` |
+| Coverage for a package | `go test -cover ./cmd/needle` |
 | Vet | `go vet ./...` |
 | Check formatting (should print nothing) | `gofmt -l .` |
 | Fix formatting | `gofmt -w .` |
@@ -272,7 +274,7 @@ The app does not read `.env` itself. Export it into your shell for development r
 
 ```sh
 set -a; . ./.env; set +a
-go run ./cmd/tidal-tui
+go run ./cmd/needle
 ```
 
 ### API spike tool

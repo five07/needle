@@ -18,8 +18,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/zalando/go-keyring"
 
-	"github.com/five07/tidal-tui/internal/auth"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/auth"
+	"github.com/five07/needle/internal/tidal"
 )
 
 func TestMain(m *testing.M) {
@@ -97,7 +97,7 @@ func (f *fakeTIDAL) deps() deps {
 func storeKeyring(t *testing.T, tok auth.Tokens) {
 	t.Helper()
 	b, _ := json.Marshal(tok)
-	if err := keyring.Set("tidal-tui", "tidal-account", string(b)); err != nil {
+	if err := keyring.Set("needle", "tidal-account", string(b)); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -306,7 +306,7 @@ func TestRunAuth(t *testing.T) {
 				t.Errorf("API saw %v, want %q", f.lastBearer.Load(), tt.wantBearer)
 			}
 
-			logBytes, _ := os.ReadFile(filepath.Join(stateDir, "tidal-tui.log"))
+			logBytes, _ := os.ReadFile(filepath.Join(stateDir, "needle.log"))
 			for _, want := range tt.wantLog {
 				if !strings.Contains(string(logBytes), want) {
 					t.Errorf("log missing %q:\n%s", want, logBytes)
@@ -319,7 +319,7 @@ func TestRunAuth(t *testing.T) {
 			}
 
 			if tt.wantKeyringRT != "" && !tt.keyringErr {
-				raw, err := keyring.Get("tidal-tui", "tidal-account")
+				raw, err := keyring.Get("needle", "tidal-account")
 				var got auth.Tokens
 				_ = json.Unmarshal([]byte(raw), &got)
 				switch {

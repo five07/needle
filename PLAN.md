@@ -1,6 +1,6 @@
 # PLAN
 
-`tidal-tui` is a Go based Tidal tui client.
+`needle` (formerly `tidal-tui`) is a Go based terminal client for TIDAL.
 
 - It will utilize the well documented Tidal API for bit-perfect playback
 - It will utilize the Charm framework for an easy and clean look
@@ -445,10 +445,10 @@ This is adapted from the CLAUDE.md template (Q14) and applies to every ticket. C
 - [ ] `go test -race ./...`, `go vet ./...`, and `gofmt -l .` are clean.
 - [ ] Changed non-UI packages are at 95%+ statement coverage. Changed TUI packages are at 80%+, using `teatest` or golden tests. API code has `httptest` coverage against a fake TIDAL API server, which is the e2e layer.
 - [ ] Security self-review of the diff covers input validation, error messages that don't leak tokens or internals, concurrency on shared state, and no new fail-open paths. Findings go in the report.
-- [ ] `go build ./cmd/tidal-tui` succeeds and the binary starts.
+- [ ] `go build ./cmd/needle` succeeds and the binary starts.
 - [ ] The README is updated wherever behavior, configuration, keybindings, or tradeoffs changed.
 - [ ] New dependencies are limited to those named in the ticket (for example the Charm v2 stack or a keyring library). No changes outside the ticket's scope.
-- [ ] Logging uses `log/slog` to a file under `$XDG_STATE_HOME/tidal-tui/`, with `track_id` and `request_id` as structured fields where relevant. Logs never include tokens.
+- [ ] Logging uses `log/slog` to a file under `$XDG_STATE_HOME/needle/`, with `track_id` and `request_id` as structured fields where relevant. Logs never include tokens.
 
 
 ## New Items

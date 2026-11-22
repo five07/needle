@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // Message returns a short, user-readable explanation of a playback error,
@@ -25,7 +25,7 @@ func Message(err error) string {
 	case errors.Is(err, tidal.ErrPrerequisiteMissing):
 		return "TIDAL needs something set up on your account before this track can play. Check your account in the TIDAL app."
 	case errors.Is(err, tidal.ErrDRMProtected):
-		return "This track is DRM protected, and tidal-tui only plays unprotected streams."
+		return "This track is DRM protected, and needle only plays unprotected streams."
 	case errors.Is(err, tidal.ErrUnauthorized):
 		return "Your TIDAL session has ended. Log in again."
 	case errors.Is(err, tidal.ErrNotFound), errors.Is(err, tidal.ErrInvalidResourceID):

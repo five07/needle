@@ -17,7 +17,7 @@ import (
 // Format is an audio format accepted by GET /trackManifests.
 type Format string
 
-// Formats tidal-tui requests. Dolby Atmos (EAC3_JOC) and HE-AAC are not used.
+// Formats needle requests. Dolby Atmos (EAC3_JOC) and HE-AAC are not used.
 const (
 	FormatAACLC     Format = "AACLC"
 	FormatFLAC      Format = "FLAC"
@@ -43,7 +43,7 @@ const (
 	PreviewRequiresHigherAccessTier PreviewReason = "FULL_REQUIRES_HIGHER_ACCESS_TIER"
 )
 
-// ErrDRMProtected means the manifest is DRM protected. tidal-tui does not
+// ErrDRMProtected means the manifest is DRM protected. needle does not
 // decrypt protected streams (decision-001).
 var ErrDRMProtected = errors.New("tidal: track is DRM protected")
 

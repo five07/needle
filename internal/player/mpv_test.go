@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/tidal"
 )
 
 func TestMain(m *testing.M) {
@@ -202,7 +202,7 @@ func fakeArgv(log string) string {
 
 func countMPDs(dir string) int {
 	n := 0
-	entries, _ := os.ReadDir(filepath.Join(dir, "tidal-tui"))
+	entries, _ := os.ReadDir(filepath.Join(dir, "needle"))
 	for _, e := range entries {
 		if strings.HasSuffix(e.Name(), ".mpd") {
 			n++
@@ -380,7 +380,7 @@ func TestMPVStartupFailures(t *testing.T) {
 		}, wantErr: "too long"},
 		{name: "runtime dir is a file", mutate: func(c *MPVConfig) {
 			d, _ := os.MkdirTemp("", "tt")
-			os.WriteFile(filepath.Join(d, "tidal-tui"), nil, 0o600)
+			os.WriteFile(filepath.Join(d, "needle"), nil, 0o600)
 			c.Getenv = func(string) string { return d }
 		}, wantErr: "runtime dir"},
 	}
@@ -451,11 +451,11 @@ func TestMPVCloseKillsUnresponsiveProcess(t *testing.T) {
 
 func TestPrivateDir(t *testing.T) {
 	rd := shortDir(t)
-	if err := os.Mkdir(filepath.Join(rd, "tidal-tui"), 0o755); err != nil {
+	if err := os.Mkdir(filepath.Join(rd, "needle"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	dir, owned, err := privateDir(func(string) string { return rd })
-	if err != nil || owned || dir != filepath.Join(rd, "tidal-tui") {
+	if err != nil || owned || dir != filepath.Join(rd, "needle") {
 		t.Fatalf("privateDir = %s %v %v", dir, owned, err)
 	}
 	if info, _ := os.Stat(dir); info.Mode().Perm() != 0o700 {
@@ -472,7 +472,7 @@ func TestPrivateDir(t *testing.T) {
 	os.RemoveAll(dir)
 
 	link := shortDir(t)
-	if err := os.Symlink(rd, filepath.Join(link, "tidal-tui")); err != nil {
+	if err := os.Symlink(rd, filepath.Join(link, "needle")); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := privateDir(func(string) string { return link }); err == nil {

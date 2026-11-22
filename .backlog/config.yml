@@ -1,4 +1,4 @@
-project_name: "Tidal TUI"
+project_name: "needle"
 default_status: "To Do"
 statuses: ["To Do", "In Progress", "Done"]
 labels: []
@@ -7,10 +7,10 @@ definition_of_done:
   - "go test -race ./..., go vet ./..., and gofmt -l . are clean"
   - "Coverage: changed non-UI packages 95%+, TUI packages 80%+ (teatest/golden); API code has httptest coverage against a fake TIDAL server"
   - "Security self-review done (input validation, no token or internal leaks in errors, shared-state concurrency, no fail-open paths)"
-  - "go build ./cmd/tidal-tui succeeds and the binary starts"
+  - "go build ./cmd/needle succeeds and the binary starts"
   - "README updated for behavior, config, keybinding, or tradeoff changes"
   - "Only dependencies named in the ticket added; no out-of-scope changes"
-  - "slog logging to $XDG_STATE_HOME/tidal-tui/ with track_id/request_id fields; no tokens logged"
+  - "slog logging to $XDG_STATE_HOME/needle/ with track_id/request_id fields; no tokens logged"
 date_format: "yyyy-mm-dd"
 max_column_width: 20
 default_editor: 'omarchy-launch-editor --inline'

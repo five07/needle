@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/config"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/config"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // ErrOutputUnknown means the hardware output format could not be determined

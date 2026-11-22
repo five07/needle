@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/five07/tidal-tui/internal/player"
+	"github.com/five07/needle/internal/player"
 )
 
-// BestQualityFile is the file under $XDG_STATE_HOME/tidal-tui/ that
+// BestQualityFile is the file under $XDG_STATE_HOME/needle/ that
 // remembers the highest quality TIDAL has delivered (decision 52).
 const BestQualityFile = "best_quality.json"
 

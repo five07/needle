@@ -14,7 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/needle/internal/tidal"
 )
 
 // fakeCatalog serves canned pages and counts calls.
@@ -1006,7 +1006,7 @@ func TestNoticesChannelAndSanitizing(t *testing.T) {
 
 func TestUserMessage(t *testing.T) {
 	tests := map[error]string{
-		tidal.ErrUnauthorized:      "Your TIDAL session has ended. Restart tidal-tui to log in again.",
+		tidal.ErrUnauthorized:      "Your TIDAL session has ended. Restart needle to log in again.",
 		tidal.ErrRateLimited:       "TIDAL is busy right now. Try again in a moment.",
 		tidal.ErrNotFound:          "Not found on TIDAL.",
 		tidal.ErrInvalidResourceID: "Not found on TIDAL.",
