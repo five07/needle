@@ -36,6 +36,10 @@ type KeyMap struct {
 	Unfavorite    key.Binding
 	AddToPlaylist key.Binding
 	Sort          key.Binding
+
+	// Discovery actions (decision 43).
+	Radio   key.Binding
+	Similar key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -66,6 +70,9 @@ var Keys = KeyMap{
 	Unfavorite:    key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "unfavorite")),
 	AddToPlaylist: key.NewBinding(key.WithKeys("+"), key.WithHelp("+", "add to playlist")),
 	Sort:          key.NewBinding(key.WithKeys("o"), key.WithHelp("o", "change sort")),
+
+	Radio:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "radio")),
+	Similar: key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "similar")),
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

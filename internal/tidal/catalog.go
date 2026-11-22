@@ -59,10 +59,16 @@ type Artist struct {
 type Playlist struct {
 	ID   string
 	Name string
+	// Description is TIDAL's subtitle, shown for mixes ("Gorillaz, MGMT
+	// and more").
+	Description string
 	// Editorial is set for playlists curated by TIDAL.
 	Editorial bool
-	Tracks    int
-	Duration  time.Duration
+	// Mix is set for mixes and radios: playlists TIDAL generates, which
+	// have no track count.
+	Mix      bool
+	Tracks   int
+	Duration time.Duration
 }
 
 // SearchResults holds the first page of each result type, in TIDAL's
@@ -86,6 +92,7 @@ type Page[T any] struct {
 type Catalog struct {
 	c       *Client
 	country string
+	locale  string // BCP 47 tag for mix names; empty means TIDAL's default
 }
 
 // NewCatalog returns a catalog for the ISO 3166-1 alpha-2 country code,
@@ -308,6 +315,7 @@ func artistFrom(_ *Document, r Resource) (Artist, error) {
 func playlistFrom(_ *Document, r Resource) (Playlist, error) {
 	a, err := DecodeAttributes[struct {
 		Name               string `json:"name"`
+		Description        string `json:"description"`
 		NumberOfTrackItems int    `json:"numberOfTrackItems"`
 		Duration           string `json:"duration"`
 		PlaylistType       string `json:"playlistType"`
@@ -316,11 +324,13 @@ func playlistFrom(_ *Document, r Resource) (Playlist, error) {
 		return Playlist{}, err
 	}
 	return Playlist{
-		ID:        r.ID,
-		Name:      a.Name,
-		Editorial: a.PlaylistType == "EDITORIAL",
-		Tracks:    a.NumberOfTrackItems,
-		Duration:  duration(a.Duration),
+		ID:          r.ID,
+		Name:        a.Name,
+		Description: a.Description,
+		Editorial:   a.PlaylistType == "EDITORIAL",
+		Mix:         a.PlaylistType == "MIX",
+		Tracks:      a.NumberOfTrackItems,
+		Duration:    duration(a.Duration),
 	}, nil
 }
 

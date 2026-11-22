@@ -901,7 +901,7 @@ func TestResultsRouteToTheirView(t *testing.T) {
 	}
 	// A response for a view that was closed is dropped.
 	closed := NewAlbumView(e.svc, aDisc)
-	drive(m, ForViewMsg{View: closed, Msg: pageMsg[tidal.Track]{page: tidal.Page[tidal.Track]{Items: []tidal.Track{tOneMore}}}})
+	drive(m, ForViewMsg{View: closed, Msg: pageMsg[entry]{page: tidal.Page[entry]{Items: trackEntries([]tidal.Track{tOneMore}, 0)}}})
 	if len(closed.list.entries) != 0 {
 		t.Error("closed view received a message")
 	}
@@ -1031,14 +1031,14 @@ func TestServicesDefaults(t *testing.T) {
 func TestFailedPageIsNotRetried(t *testing.T) {
 	e := newEnv(t)
 	v := NewPlaylistView(e.svc, pEss)
-	v.Update(pageMsg[tidal.Track]{page: tidal.Page[tidal.Track]{Items: []tidal.Track{tOneMore}, Next: "p1"}})
+	v.Update(pageMsg[entry]{page: tidal.Page[entry]{Items: trackEntries([]tidal.Track{tOneMore}, 0), Next: "p1"}})
 	if !v.tracks.loading {
 		t.Fatal("near the end of the list the next page was not requested")
 	}
 	if cmd := v.Update(press("j")); cmd != nil {
 		t.Error("a key press started a second request while one was loading")
 	}
-	if cmd := v.Update(pageMsg[tidal.Track]{err: tidal.ErrRateLimited}); cmd != nil {
+	if cmd := v.Update(pageMsg[entry]{err: tidal.ErrRateLimited}); cmd != nil {
 		t.Error("the error answer requested the page again")
 	}
 	if cmd := v.Update(press("j")); cmd != nil {

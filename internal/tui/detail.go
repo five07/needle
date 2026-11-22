@@ -59,16 +59,26 @@ func (p *pager) received(svc *Services, what string, err error, next string) boo
 	return true
 }
 
-// TrackListView shows an album's or a playlist's tracks under a header,
-// loading more pages as the cursor nears the end.
+// TrackListView shows a paged list under a header: an album's or a
+// playlist's tracks (mixes and radios included), or similar items. It
+// loads more pages as the cursor nears the end.
 type TrackListView struct {
 	svc    *Services
 	title  string
 	meta   string
 	empty  string
-	fetch  pageFetch[tidal.Track]
+	what   string // what the list holds, for errors ("tracks")
+	fetch  pageFetch[entry]
 	list   entryList
 	tracks pager
+}
+
+// entriesOf adapts a page source of T to one of entries.
+func entriesOf[T any](f pageFetch[T], conv func([]T, int) []entry) pageFetch[entry] {
+	return func(ctx context.Context, next string) (tidal.Page[entry], error) {
+		p, err := f(ctx, next)
+		return tidal.Page[entry]{Items: conv(p.Items, 0), Next: p.Next}, err
+	}
 }
 
 // NewAlbumView returns the detail view for album a.
@@ -79,9 +89,10 @@ func NewAlbumView(svc *Services, a tidal.Album) *TrackListView {
 		title: a.Title,
 		meta:  joinMeta(strings.Join(a.Artists, ", "), a.Year, countTracks(a.Tracks), clock(a.Duration)),
 		empty: "This album has no playable tracks.",
-		fetch: func(ctx context.Context, next string) (tidal.Page[tidal.Track], error) {
+		what:  "tracks",
+		fetch: entriesOf(func(ctx context.Context, next string) (tidal.Page[tidal.Track], error) {
 			return cat.AlbumTracks(ctx, a.ID, next)
-		},
+		}, trackEntries),
 		list: newEntryList(svc),
 	}
 }
@@ -93,16 +104,61 @@ func NewPlaylistView(svc *Services, p tidal.Playlist) *TrackListView {
 	if p.Editorial {
 		owner = "TIDAL"
 	}
+	meta, empty := joinMeta(owner, countTracks(p.Tracks), clock(p.Duration)), "This playlist has no playable tracks."
+	if p.Mix {
+		meta, empty = joinMeta("TIDAL mix", p.Description), "This mix has no playable tracks."
+	}
 	return &TrackListView{
 		svc:   svc,
 		title: p.Name,
-		meta:  joinMeta(owner, countTracks(p.Tracks), clock(p.Duration)),
-		empty: "This playlist has no playable tracks.",
-		fetch: func(ctx context.Context, next string) (tidal.Page[tidal.Track], error) {
+		meta:  meta,
+		empty: empty,
+		what:  "tracks",
+		fetch: entriesOf(func(ctx context.Context, next string) (tidal.Page[tidal.Track], error) {
 			return cat.PlaylistTracks(ctx, p.ID, next)
-		},
+		}, trackEntries),
 		list: newEntryList(svc),
 	}
+}
+
+// NewRadioView returns the track list of a radio mix (decision 43).
+func NewRadioView(svc *Services, radio tidal.Playlist) *TrackListView {
+	v := NewPlaylistView(svc, radio)
+	v.title = "Radio: " + radio.Name
+	v.empty = "This radio has no playable tracks."
+	return v
+}
+
+// NewSimilarView returns the items TIDAL lists as similar to en: tracks for
+// a track, artists for an artist, albums for an album. ok is false for
+// other entries.
+func NewSimilarView(svc *Services, en entry) (v *TrackListView, ok bool) {
+	d := svc.Discovery
+	v = &TrackListView{svc: svc, list: newEntryList(svc)}
+	switch en.kind {
+	case entryTrack:
+		id := en.track.ID
+		v.title, v.meta, v.what = "Similar to "+en.track.FullTitle(), "Tracks", "similar tracks"
+		v.fetch = entriesOf(func(ctx context.Context, next string) (tidal.Page[tidal.Track], error) {
+			return d.SimilarTracks(ctx, id, next)
+		}, trackEntries)
+	case entryArtist:
+		id := en.artist.ID
+		v.title, v.meta, v.what = "Similar to "+en.artist.Name, "Artists", "similar artists"
+		v.fetch = entriesOf(func(ctx context.Context, next string) (tidal.Page[tidal.Artist], error) {
+			return d.SimilarArtists(ctx, id, next)
+		}, artistEntries)
+	case entryAlbum:
+		id := en.album.ID
+		v.title, v.meta, v.what = "Similar to "+en.album.Title, "Albums", "similar albums"
+		v.fetch = entriesOf(func(ctx context.Context, next string) (tidal.Page[tidal.Album], error) {
+			return d.SimilarAlbums(ctx, id, next)
+		}, albumEntries)
+	default:
+		return nil, false
+	}
+	v.empty = "TIDAL lists no " + v.what + "."
+	return v, true
 }
 
 func joinMeta(parts ...string) string {
@@ -134,7 +190,7 @@ func (v *TrackListView) Render(width, height int, focused bool) string {
 	case len(v.list.entries) > 0:
 		body = v.list.render(width, bodyH, focused)
 	case v.tracks.errText != "":
-		body = styleDim.Render(fit("Could not load tracks: "+v.tracks.errText, width))
+		body = styleDim.Render(fit("Could not load "+v.what+": "+v.tracks.errText, width))
 	case !v.tracks.done:
 		body = styleDim.Render(fit("Loading…", width))
 	default:
@@ -145,9 +201,9 @@ func (v *TrackListView) Render(width, height int, focused bool) string {
 
 // Update implements View.
 func (v *TrackListView) Update(msg tea.Msg) tea.Cmd {
-	if m, ok := msg.(pageMsg[tidal.Track]); ok {
-		if v.tracks.received(v.svc, "tracks", m.err, m.page.Next) {
-			v.list.add(trackEntries(m.page.Items, 0)...)
+	if m, ok := msg.(pageMsg[entry]); ok {
+		if v.tracks.received(v.svc, v.what, m.err, m.page.Next) {
+			v.list.add(m.page.Items...)
 		}
 		return v.more()
 	}

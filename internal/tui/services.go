@@ -33,6 +33,17 @@ type Library interface {
 	AddToPlaylist(ctx context.Context, playlistID, trackID string) error
 }
 
+// Discovery reads the user's mixes, radios, and similar items.
+// *tidal.Catalog implements it.
+type Discovery interface {
+	Mixes(ctx context.Context, kind tidal.MixKind) ([]tidal.Playlist, error)
+	TrackRadio(ctx context.Context, trackID string) (tidal.Playlist, error)
+	ArtistRadio(ctx context.Context, artistID string) (tidal.Playlist, error)
+	SimilarTracks(ctx context.Context, trackID, next string) (tidal.Page[tidal.Track], error)
+	SimilarArtists(ctx context.Context, artistID, next string) (tidal.Page[tidal.Artist], error)
+	SimilarAlbums(ctx context.Context, albumID, next string) (tidal.Page[tidal.Album], error)
+}
+
 // Playback starts and queues tracks. The views call it from commands, off
 // the UI goroutine.
 type Playback interface {
@@ -61,14 +72,17 @@ const (
 // Services connects the views to TIDAL and the player.
 type Services struct {
 	// Ctx is canceled when the program stops. Default context.Background.
-	Ctx      context.Context
-	Catalog  Catalog
-	Library  Library
-	Playback Playback
+	Ctx       context.Context
+	Catalog   Catalog
+	Library   Library
+	Discovery Discovery
+	Playback  Playback
 	// Logger receives failures in full; the UI shows short messages.
 	Logger *slog.Logger
 	// Tick schedules fn after d. Default tea.Tick (tests replace it).
 	Tick func(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd
+	// Now is the clock. Default time.Now (tests replace it).
+	Now func() time.Time
 
 	// known holds favorite state learned this session. Only the UI
 	// goroutine touches it.
@@ -87,6 +101,13 @@ func (s *Services) logger() *slog.Logger {
 		return slog.New(slog.DiscardHandler)
 	}
 	return s.Logger
+}
+
+func (s *Services) now() time.Time {
+	if s.Now == nil {
+		return time.Now()
+	}
+	return s.Now()
 }
 
 func (s *Services) tick(d time.Duration, fn func(time.Time) tea.Msg) tea.Cmd {

@@ -63,6 +63,12 @@ type Opener interface {
 	Open() tea.Cmd
 }
 
+// Revisiter is implemented by views that refresh when shown again (after
+// another view was shown), such as Discovery reloading stale mixes.
+type Revisiter interface {
+	Revisit() tea.Cmd
+}
+
 // Filterer is implemented by views with their own filter. In such a view
 // "/" starts the filter instead of going to Search.
 type Filterer interface {

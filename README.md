@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), and the Library (favorites and playlists) are in place. The Discovery, Queue, and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The Queue and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -68,9 +68,11 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 | `enter` | Play the selected track, or open the selected album, artist, or playlist |
 | `a` | Add the selected track, album, or playlist to the end of the queue |
 | `A` | Play the selected track, album, or playlist next |
-| `tab` / `shift+tab` | Jump to the next / previous group of results, or switch Library tabs |
+| `tab` / `shift+tab` | Jump to the next / previous group of results, or switch Library and Discovery tabs |
 | `f` / `F` | Add the selected track, album, artist, or playlist to your favorites / remove it |
 | `+` | Add the selected track to one of your playlists |
+| `R` | Start radio for the selected track or artist |
+| `S` | List tracks, artists, or albums similar to the selected one |
 | `o` | Change the sort order of the current Library tab |
 | `esc`, `backspace` | Go back, leave the search input, or clear the Library filter |
 | `/` | Go to Search and type a query (in Library: filter the current tab) |
@@ -81,7 +83,7 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 
 While the search input has focus, letters type into it, so `q`, `j`, and the other single-letter keys do not act. Press `esc` (or `enter`) to leave the input.
 
-The hint line shows as many keys as fit; `?` lists them all. In the Library, `/ filter` and `tab` come first so they stay visible on small terminals.
+The hint line shows as many keys as fit; `?` lists them all. In the Library, `/ filter` and `tab` come first, and in Discovery `tab` does, so they stay visible on small terminals.
 
 ### Search
 
@@ -100,6 +102,15 @@ The Library has four tabs: **Playlists** (the ones you own and the ones you adde
 - **`/`** filters the current tab by title, artist, and album, ignoring case and accents. While a filter is set, the rest of the tab loads in the background so the filter covers all of it, up to 5000 items (a notice says when it stops there). `enter` keeps the filter and returns to the list; `esc` clears it.
 - **`f` / `F`** work in every view. TIDAL has no way to ask whether one item is a favorite, so a `♥` marks only items tidal-tui knows about: ones loaded in the Library or favorited this session. Removing a favorite in the Library drops its row; adding one elsewhere reloads the matching tab.
 - **`+`** on a track opens a list of the playlists you own. `enter` adds the track to the selected one and `esc` cancels. A track already in that playlist is not added twice.
+
+### Discovery
+
+Discovery shows the mixes TIDAL makes for you in tabs: **Daily** (your daily mixes), **Discovery** (new and familiar artists), and **New Releases**. A kind with no mixes gets no tab. Mixes load the first time you open Discovery and again when you come back more than an hour later, since TIDAL updates them every morning. Mix names use your system language (`LC_ALL`, `LC_MESSAGES`, or `LANG`) when TIDAL supports it.
+
+Open a mix to see its tracks; play and queue it like a playlist. `f` and `F` add a mix to your favorites (it then appears in the Library's Playlists tab) or remove it.
+
+- **`R`** on a track or artist, in any view, opens its radio: a mix of tracks like it, played and queued like any track list. Albums, playlists, and mixes have no radio.
+- **`S`** on a track, artist, or album, in any view, lists similar tracks, artists, or albums, loading more as you scroll. Playlists and mixes have no similar list.
 
 ### Mouse
 

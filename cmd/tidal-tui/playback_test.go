@@ -202,9 +202,22 @@ func screen(m tea.Model) string { return ansi.Strip(m.View().Content) }
 // server: search, results on screen, Enter plays, and the player's error
 // (the fake serves no manifests) comes back as a notice.
 func TestRunSearchEndToEnd(t *testing.T) {
-	getenv, _, _ := testEnv(t, map[string]string{"TIDAL_CLIENT_ID": "id"})
+	getenv, _, _ := testEnv(t, map[string]string{"TIDAL_CLIENT_ID": "id", "LANG": "nb_NO.UTF-8"})
 	f := newFakeTIDAL(t)
 	var searchQuery, searchCountry string
+	var mixLocale string
+	f.mux.HandleFunc("/v2/userDailyMixes/me/relationships/items", func(w http.ResponseWriter, r *http.Request) {
+		mixLocale = r.URL.Query().Get("locale")
+		w.Header().Set("Content-Type", "application/vnd.api+json")
+		io.WriteString(w, `{"data":[{"id":"00237b2a1d39536f0ef81e836a9176","type":"playlists"}],
+			"included":[{"id":"00237b2a1d39536f0ef81e836a9176","type":"playlists","attributes":{"name":"Min miks 1","description":"Morcheeba og flere","playlistType":"MIX"}}]}`)
+	})
+	for _, k := range []string{"userDiscoveryMixes", "userNewReleaseMixes"} {
+		f.mux.HandleFunc("/v2/"+k+"/me/relationships/items", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/vnd.api+json")
+			io.WriteString(w, `{"data":[]}`)
+		})
+	}
 	f.mux.HandleFunc("/v2/searchResults", func(w http.ResponseWriter, r *http.Request) {
 		searchQuery, searchCountry = r.URL.Query().Get("filter[query]"), r.URL.Query().Get("countryCode")
 		w.Header().Set("Content-Type", "application/vnd.api+json")
@@ -273,6 +286,11 @@ func TestRunSearchEndToEnd(t *testing.T) {
 		feed(key("2"))
 		if out := screen(m); !strings.Contains(out, "Road trip") {
 			uiErr = errors.New("library playlists missing:\n" + out)
+			return nil
+		}
+		feed(key("3"))
+		if out := screen(m); !strings.Contains(out, "Min miks 1") || !strings.Contains(out, "Morcheeba og flere") || strings.Contains(out, "New Releases") {
+			uiErr = errors.New("discovery mixes missing:\n" + out)
 		}
 		return nil
 	}
@@ -282,6 +300,9 @@ func TestRunSearchEndToEnd(t *testing.T) {
 	}
 	if uiErr != nil {
 		t.Fatal(uiErr)
+	}
+	if mixLocale != "nb-NO" {
+		t.Errorf("mix locale = %q, want nb-NO from LANG", mixLocale)
 	}
 	if favMethod != http.MethodPost || favBody != `{"data":[{"id":"1550546","type":"tracks"}]}` {
 		t.Errorf("favorite request = %s %s", favMethod, favBody)
@@ -297,12 +318,12 @@ func TestNewUIErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := defaultDeps
-	if _, _, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "us"}, discardLogger()); err == nil {
+	if _, _, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "us"}, "", discardLogger()); err == nil {
 		t.Error("invalid country accepted")
 	}
 	cfg := testConfig()
 	cfg.Quality = "loud"
-	if _, _, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, discardLogger()); err == nil {
+	if _, _, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, "", discardLogger()); err == nil {
 		t.Error("invalid quality accepted")
 	}
 	// The player starts the configured engine with the audio settings.
@@ -345,4 +366,39 @@ func TestRunFailsOnBadAccountCountry(t *testing.T) {
 	if !strings.Contains(stderr.String(), "invalid country code") || f.uiRuns.Load() != 0 {
 		t.Errorf("stderr %q, ui runs %d", stderr.String(), f.uiRuns.Load())
 	}
+}
+
+func TestLocaleFromEnv(t *testing.T) {
+	tests := []struct {
+		env  map[string]string
+		want string
+	}{
+		{map[string]string{"LANG": "en_US.UTF-8"}, "en-US"},
+		{map[string]string{"LANG": "de_DE@euro"}, "de-DE"},
+		{map[string]string{"LANG": "fr_FR.UTF-8", "LC_MESSAGES": "nb_NO.UTF-8"}, "nb-NO"},
+		{map[string]string{"LANG": "fr_FR", "LC_MESSAGES": "nb_NO", "LC_ALL": "pt_BR.UTF-8"}, "pt-BR"},
+		{map[string]string{"LANG": "C.UTF-8"}, ""},
+		{map[string]string{"LC_ALL": "POSIX"}, ""},
+		{map[string]string{}, ""},
+	}
+	for _, tt := range tests {
+		if got := localeFromEnv(func(k string) string { return tt.env[k] }); got != tt.want {
+			t.Errorf("localeFromEnv(%v) = %q, want %q", tt.env, got, tt.want)
+		}
+	}
+}
+
+// A locale TIDAL would reject is logged and left out, not fatal.
+func TestNewUIIgnoresBadLocale(t *testing.T) {
+	f := newFakeTIDAL(t)
+	d := f.deps()
+	c, err := tidal.New(stubTokenSource{}, append([]tidal.Option{tidal.WithLogger(discardLogger())}, d.apiOptions...)...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, stop, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "US"}, "english", discardLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	stop()
 }

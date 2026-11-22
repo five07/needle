@@ -80,6 +80,7 @@ type Model struct {
 	notices  <-chan string
 	svc      *Services
 	opened   map[View]bool // views whose Open has run
+	shown    View          // the view openCurrent last saw
 }
 
 // New returns the shell with the given section views.
@@ -90,6 +91,9 @@ func New(cfg Config) *Model {
 	}
 	if cfg.Library == nil && cfg.Services != nil && cfg.Services.Library != nil {
 		cfg.Library = NewLibraryView(cfg.Services)
+	}
+	if cfg.Discovery == nil && cfg.Services != nil && cfg.Services.Discovery != nil {
+		cfg.Discovery = NewDiscoveryView(cfg.Services)
 	}
 	roots := [sectionCount]View{cfg.Search, cfg.Library, cfg.Discovery, cfg.Queue, cfg.Account}
 	names := [sectionCount]string{"Search", "Library", "Discovery", "Queue", "Account"}
@@ -345,15 +349,20 @@ func (m *Model) withOpen(cmd tea.Cmd) tea.Cmd {
 	return cmd
 }
 
-// openCurrent runs Open once for the current view, if it is an Opener.
+// openCurrent runs Open once for the current view, if it is an Opener,
+// and Revisit each later time the view is shown again after another one.
 func (m *Model) openCurrent() tea.Cmd {
 	v := m.current()
-	o, ok := v.(Opener)
-	if !ok || m.opened[v] {
-		return nil
+	again := v != m.shown
+	m.shown = v
+	if o, ok := v.(Opener); ok && !m.opened[v] {
+		m.opened[v] = true
+		return o.Open()
 	}
-	m.opened[v] = true
-	return o.Open()
+	if r, ok := v.(Revisiter); ok && again {
+		return r.Revisit()
+	}
+	return nil
 }
 
 // favoriteChanged records a finished favorite change, tells every open

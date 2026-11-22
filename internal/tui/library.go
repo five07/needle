@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/five07/tidal-tui/internal/tidal"
 )
 
@@ -147,33 +146,19 @@ var sortNames = map[tidal.Sort]string{
 	tidal.SortAdded: "date added", tidal.SortTitle: "title", tidal.SortName: "name", tidal.SortArtist: "artist",
 }
 
-// tabBar returns the tab row and the [start, end) column of each tab.
-func (v *LibraryView) tabBar(width int) (string, [][2]int) {
-	var b strings.Builder
-	spans := make([][2]int, len(v.tabs))
-	x := 0
+func (v *LibraryView) titles() []string {
+	out := make([]string, len(v.tabs))
 	for i, t := range v.tabs {
-		label := " " + t.title + " "
-		spans[i] = [2]int{x, x + len(label)}
-		x += len(label) + 1
-		if i == v.active {
-			label = styleSelected.Render(label)
-		}
-		b.WriteString(label + " ")
+		out[i] = t.title
 	}
-	sortText := "sort: " + sortNames[v.tab().sorts[v.tab().sort]]
-	line := b.String()
-	if pad := width - ansi.StringWidth(line) - len(sortText); pad > 0 {
-		line += strings.Repeat(" ", pad) + styleDim.Render(sortText)
-	}
-	return fit(line, width), spans
+	return out
 }
 
 func (v *LibraryView) filtering() bool { return v.filter.Focused() || v.filter.Value() != "" }
 
 // Render implements View.
 func (v *LibraryView) Render(width, height int, focused bool) string {
-	bar, _ := v.tabBar(width)
+	bar := tabBar(v.titles(), v.active, width, "sort: "+sortNames[v.tab().sorts[v.tab().sort]])
 	second := styleBorder.Render(strings.Repeat("─", width))
 	if v.filtering() {
 		v.filter.SetWidth(max(1, width-len(v.filter.Prompt)-1))
@@ -226,11 +211,8 @@ func (v *LibraryView) Update(msg tea.Msg) tea.Cmd {
 	case ClickMsg:
 		v.filter.Blur()
 		if msg.Y == 0 {
-			_, spans := v.tabBar(1 << 10)
-			for i, s := range spans {
-				if msg.X >= s[0] && msg.X < s[1] {
-					return v.switchTab(i - v.active)
-				}
+			if i := tabAt(v.titles(), msg.X); i >= 0 {
+				return v.switchTab(i - v.active)
 			}
 			return nil
 		}

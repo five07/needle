@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/five07/tidal-tui/internal/auth"
@@ -168,7 +169,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (%s).\n", user.Username, user.Country)
 
-	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, logger)
+	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, localeFromEnv(getenv), logger)
 	if err != nil {
 		logger.Error("ui setup failed", "err", err)
 		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
@@ -190,10 +191,15 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 // starts mpv on first playback). stop ends the player and waits for it to
 // close mpv.
 func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client, user tidal.User,
-	logger *slog.Logger) (model tea.Model, stop func(), err error) {
+	locale string, logger *slog.Logger) (model tea.Model, stop func(), err error) {
 	catalog, err := tidal.NewCatalog(client, user.Country)
 	if err != nil {
 		return nil, nil, err
+	}
+	if locale != "" {
+		if err := catalog.SetLocale(locale); err != nil {
+			logger.Info("locale not used for mix names", "locale", locale) // TIDAL's default applies
+		}
 	}
 	resolver, err := stream.NewResolver(client, cfg.Quality, logger)
 	if err != nil {
@@ -214,7 +220,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	go watchStatus(uiCtx, p, notices)
 
 	model = tui.New(tui.Config{
-		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Playback: &playback{q: q, p: p}, Logger: logger},
+		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog, Playback: &playback{q: q, p: p}, Logger: logger},
 		Notices:  notices,
 	})
 	return model, func() { cancel(); <-done }, nil
@@ -287,4 +293,22 @@ func playerConfig(d deps, cfg config.Config, r player.Resolver, q *queue.Queue[p
 		Prober:    player.NewProber(cfg.Audio.Mode, cfg.Audio.Device),
 		Logger:    logger,
 	}
+}
+
+// localeFromEnv turns the POSIX locale (LC_ALL, then LC_MESSAGES, then
+// LANG, for example "en_US.UTF-8") into a BCP 47 tag ("en-US") for mix
+// names. "C", "POSIX", and unset give "", which leaves TIDAL's default.
+func localeFromEnv(getenv func(string) string) string {
+	v := ""
+	for _, k := range []string{"LC_ALL", "LC_MESSAGES", "LANG"} {
+		if v = getenv(k); v != "" {
+			break
+		}
+	}
+	v, _, _ = strings.Cut(v, ".") // drop the codeset
+	v, _, _ = strings.Cut(v, "@") // and the modifier
+	if v == "C" || v == "POSIX" {
+		return ""
+	}
+	return strings.ReplaceAll(v, "_", "-")
 }

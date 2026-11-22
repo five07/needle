@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -50,6 +51,14 @@ func albumEntries(as []tidal.Album, group int) []entry {
 	out := make([]entry, len(as))
 	for i, a := range as {
 		out[i] = entry{kind: entryAlbum, album: a, group: group}
+	}
+	return out
+}
+
+func artistEntries(as []tidal.Artist, group int) []entry {
+	out := make([]entry, len(as))
+	for i, a := range as {
+		out[i] = entry{kind: entryArtist, artist: a, group: group}
 	}
 	return out
 }
@@ -152,6 +161,10 @@ func (e *entryList) update(msg tea.Msg) (cmd tea.Cmd, handled bool) {
 			}
 		case key.Matches(msg, Keys.AddToPlaylist):
 			return e.addToPlaylist(), true
+		case key.Matches(msg, Keys.Radio):
+			return e.radio(), true
+		case key.Matches(msg, Keys.Similar):
+			return e.similar(), true
 		default:
 			return nil, false
 		}
@@ -262,6 +275,9 @@ func (e *entryList) bindings(groups bool) []key.Binding {
 		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "play/open")),
 		Keys.QueueAdd, Keys.PlayNext, Keys.Favorite, Keys.Unfavorite, Keys.AddToPlaylist,
 	}
+	if e.svc != nil && e.svc.Discovery != nil {
+		bs = append(bs, Keys.Radio, Keys.Similar)
+	}
 	if groups {
 		bs = append(bs, Keys.NextGroup, Keys.PrevGroup)
 	}
@@ -283,6 +299,62 @@ func (e *entryList) addToPlaylist() tea.Cmd {
 		return Notify("Only tracks can be added to a playlist.")
 	}
 	return Push(NewPlaylistPicker(e.svc, en.track))
+}
+
+// radioTimeout bounds the request for a radio mix.
+const radioTimeout = 15 * time.Second
+
+// radio opens the radio of the selected track or artist (AC #3).
+func (e *entryList) radio() tea.Cmd {
+	en, ok := e.selected()
+	if !ok || e.svc == nil || e.svc.Discovery == nil {
+		return nil
+	}
+	var get func(context.Context) (tidal.Playlist, error)
+	name := ""
+	d := e.svc.Discovery
+	switch en.kind {
+	case entryTrack:
+		id := en.track.ID
+		name, get = en.track.FullTitle(), func(ctx context.Context) (tidal.Playlist, error) { return d.TrackRadio(ctx, id) }
+	case entryArtist:
+		id := en.artist.ID
+		name, get = en.artist.Name, func(ctx context.Context) (tidal.Playlist, error) { return d.ArtistRadio(ctx, id) }
+	default:
+		return Notify("Radio is available for tracks and artists.")
+	}
+	svc := e.svc
+	ctx := svc.ctx()
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, radioTimeout)
+		defer cancel()
+		radio, err := get(ctx)
+		switch {
+		case errors.Is(err, tidal.ErrNoRadio):
+			return NoticeMsg{Text: "TIDAL has no radio for " + name + "."}
+		case err != nil:
+			svc.logger().Warn("load radio failed", "item", name, "err", err)
+			if svc.ctx().Err() != nil {
+				return nil // shutting down
+			}
+			return NoticeMsg{Text: "Could not start radio: " + userMessage(err)}
+		}
+		return PushMsg{View: NewRadioView(svc, radio)}
+	}
+}
+
+// similar lists items similar to the selected track, artist, or album
+// (AC #4).
+func (e *entryList) similar() tea.Cmd {
+	en, ok := e.selected()
+	if !ok || e.svc == nil || e.svc.Discovery == nil {
+		return nil
+	}
+	v, ok := NewSimilarView(e.svc, en)
+	if !ok {
+		return Notify("Similar is available for tracks, artists, and albums.")
+	}
+	return Push(v)
 }
 
 // favoritesChanged redraws the rows on the next render, so favorite
@@ -373,6 +445,9 @@ func rowText(en entry, width int, fav bool) string {
 		return indent + en.artist.Name
 	case entryPlaylist:
 		p := en.playlist
+		if p.Mix { // no track count; the description names the artists
+			return indent + columns(w, cell{text: p.Name, share: 7}, cell{text: p.Description, share: 13})
+		}
 		owner := ""
 		if p.Editorial {
 			owner = "TIDAL"

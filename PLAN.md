@@ -249,6 +249,31 @@ API facts below come from the official OpenAPI spec v1.10.258 (the same version 
     - b) Newest added first only, with no sort key in v1.
     > MS: a
 
+### TASK-012 (discovery)
+
+API facts below come from the official OpenAPI spec v1.10.258 and a live probe on 2026-11-22. Mixes and radios are ordinary `playlists` resources with `playlistType: "MIX"` and a `description` (for example "Julian Casablancas, Gorillaz, MGMT and more") but no track count. Their tracks load through the same call as any playlist. The probe returned 8 Daily Mixes, 1 Discovery Mix, and 1 New Release Mix, with no paging. Track and artist radio each return one mix. There is no radio for albums or playlists, and no "similar" for playlists. Similar tracks, artists, and albums come 20 per page.
+
+40. **Discovery layout.** `UI.md` section 4 lists three sections: Daily Mixes, Discovery Mixes, New Release Mixes.
+    - a) **(Recommended)** One grouped list, like Search results: a heading per group, `tab`/`shift+tab` jump between groups, and groups with no mixes are left out. Each mix row shows its name and description.
+    - b) Sub-tabs, like the Library.
+    > MS: b. in fact I prefer that layout, let's create a task to do that in search too, including the help bar update.
+
+41. **When mixes reload.** TIDAL updates Daily and Discovery mixes every morning, so a list loaded at startup goes stale in a long session.
+    - a) **(Recommended)** Load when Discovery is first shown, and load again when you come back to it more than an hour later. No refresh key.
+    - b) Load once per session.
+    - c) Load once, plus a refresh key.
+    > MS: a
+
+42. **Favorites and "add to playlist" on mixes.** Mixes are playlists, but they are generated for you and are not in the Library collection. Whether TIDAL accepts a mix as a favorite is unverified.
+    - a) **(Recommended)** `f`/`F` on a mix row say "Mixes cannot be added to favorites" and send nothing. Tracks inside a mix work as everywhere else.
+    - b) Send the request anyway and show TIDAL's answer.
+    > MS: a. I just tested it and they can be favorited
+
+43. **Radio and Similar keys.** `UI.md` section 5 marks `R` (radio) and `S` (similar) as guesses. `s` and `r` are taken by shuffle and repeat in TASK-013.
+    - a) **(Recommended)** `R` starts radio on a track or artist and `S` lists similar items for a track, artist, or album, in every view. On a row without one (radio on an album, playlist, or mix; similar on a playlist or mix) a notice says what is supported.
+    - b) Other keys (name them).
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -326,6 +351,10 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 34 | Library layout | One section with sub-tabs Playlists, Albums, Tracks, Artists; `tab`/`shift+tab` and clicks switch; each tab loads on first visit. |
 | 35 | Filter reach | While a filter is active, the remaining pages load in the background (up to 5000 items per tab, notice at the cap); matches title, artist, and album, ignoring case and accents. |
 | 36 | Sort | Newest added first; `o` cycles the server-side sort for the tab (date added, title, artist name where the tab has one) and reloads. |
+| 40 | Discovery layout | Sub-tabs like the Library: Daily, Discovery, New Releases; `tab`/`shift+tab` and clicks switch; tabs with no mixes are left out. Search moves to the same layout in its own task. |
+| 41 | Mix reload | Load when Discovery is first shown, and again on a visit more than an hour later. No refresh key. |
+| 42 | Favorites on mixes | `f`/`F` work on mix rows like any playlist (the user confirmed TIDAL accepts mixes as favorites). |
+| 43 | Radio and Similar keys | `R` radio on tracks and artists, `S` similar on tracks, artists, and albums, in every view; other rows get a notice saying what is supported. |
 | 37 | Rename migration | None. Run `tidal-tui -logout` before switching and move `config.toml` by hand; the README says nothing about it. |
 | 38 | Rename timing | After v1 is feature-complete, as its own ticket. Until then the code, paths, and docs keep `tidal-tui`. |
 | 39 | Affiliation notice | One README line under the intro, "needle is an independent project and is not affiliated with or endorsed by TIDAL.", also printed by `-version`. |

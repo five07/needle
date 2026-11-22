@@ -1,0 +1,24 @@
+┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
+│   Search      │ My Mix 1                                                     │
+│   Library     │ TIDAL mix · The Herbaliser, Morcheeba and more               │
+│ ▸ Discovery   │ ──────────────────────────────────────────────────────────── │
+│   Queue       │   One More Time         Daft Punk      Discovery        5:20 │
+│   Account     │   Harder, Better, Fas…  Daft Punk      Discovery        3:44 │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+├───────────────┴──────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                                                                              │
+│                               Nothing playing                                │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ j/k move · h back · enter play/open · a add to queue · A play next           │
+└──────────────────────────────────────────────────────────────────────────────┘
