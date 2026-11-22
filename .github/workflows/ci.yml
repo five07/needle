@@ -1,8 +1,12 @@
 name: CI
 
+# Runs only for pull requests into main, and on main after they merge.
+# Pushes to other branches (such as develop) do not trigger CI.
 on:
-  push:
   pull_request:
+    branches: [main]
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -11,9 +15,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
 

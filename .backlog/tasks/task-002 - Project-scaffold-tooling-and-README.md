@@ -1,11 +1,11 @@
 ---
 id: TASK-002
 title: Project scaffold, tooling, and README
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T03:53:35Z'
-updated_date: '2026-11-22T04:55:57Z'
+updated_date: '2026-11-22T05:11:27Z'
 labels:
   - infra
 milestone: m-0
@@ -27,7 +27,7 @@ New repo with no code. Everything else needs a module, entrypoint, and agreed co
 - [x] #2 `go build ./cmd/tidal-tui` produces a binary that prints version with --version
 - [x] #3 README documents build, run, test, vet, and gofmt commands, and states Linux-only support and the mpv runtime requirement
 - [x] #4 LICENSE file contains the MIT license
-- [ ] #5 CI workflow on Linux runs go test -race, go vet, and gofmt -l on push and PR
+- [x] #5 CI workflow on Linux runs go test -race, go vet, and gofmt -l on push and PR
 <!-- AC:END -->
 
 ## Definition of Done
@@ -63,4 +63,12 @@ Implemented 2026-11-21.
 - README, MIT LICENSE, .github/workflows/ci.yml (ubuntu-latest, setup-go from go.mod, gofmt check, vet, race tests, build). Workflow YAML parses; AC #5 stays unchecked until the first run on GitHub passes.
 - DoD #8 (slog file logging) not applicable: logging setup belongs to TASK-003.
 - No new dependencies (standard library only).
+
+CI verified 2026-11-22: run 44988190371 on develop passed all steps (gofmt check, vet, race tests, build) in 49s. GitHub warned that actions/checkout@v4 and setup-go@v5 target deprecated Node 20, so the workflow now uses checkout@v7 and setup-go@v7 (both node24, go-version-file input unchanged); takes effect on the next push.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Project scaffold: go.mod (github.com/five07/tidal-tui), cmd/tidal-tui entrypoint with --version (ldflags-stamped), table-driven tests, README, MIT LICENSE, and a Linux CI workflow (gofmt, vet, race tests, build). CI passed on GitHub; actions bumped to Node 24 versions afterward. Logging DoD item deferred to TASK-003, which implemented it.
+<!-- SECTION:FINAL_SUMMARY:END -->

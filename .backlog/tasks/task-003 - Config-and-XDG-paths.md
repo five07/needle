@@ -1,11 +1,11 @@
 ---
 id: TASK-003
 title: Config and XDG paths
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T03:53:35Z'
-updated_date: '2026-11-22T05:02:35Z'
+updated_date: '2026-11-22T05:11:27Z'
 labels:
   - infra
   - config
@@ -69,3 +69,9 @@ Implemented 2026-11-21.
 - Dependency: github.com/BurntSushi/toml v1.6.0, approved by the user for this ticket.
 - The app does not read .env; README documents exporting it for dev runs.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Config and XDG paths: internal/xdg resolves config/state dirs per the XDG spec; internal/config loads config.toml (BurntSushi/toml) with defaults, strict unknown-key rejection, and *ValidationError naming the key; the client ID comes from config, then TIDAL_CLIENT_ID, then a build-time ldflags default (nothing in source); internal/logging writes slog text logs to $XDG_STATE_HOME/tidal-tui/tidal-tui.log with 0700/0600 permissions. Wired into cmd/tidal-tui startup. Coverage 96.9-100% per package, mutation checks killed, CI green.
+<!-- SECTION:FINAL_SUMMARY:END -->

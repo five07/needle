@@ -70,7 +70,7 @@ Logs are written to `$XDG_STATE_HOME/tidal-tui/tidal-tui.log` (default `~/.local
 | Check formatting (should print nothing) | `gofmt -l .` |
 | Fix formatting | `gofmt -w .` |
 
-CI runs the formatting check, vet, race-enabled tests, and a build on every push and pull request (`.github/workflows/ci.yml`).
+CI runs the formatting check, vet, race-enabled tests, and a build on pull requests into `main` and on `main` after merge (`.github/workflows/ci.yml`). Pushes to other branches do not run CI, so run the checks above locally.
 
 Tasks, docs, and decisions are tracked with [Backlog.md](https://github.com/MrLesk/Backlog.md) under `.backlog/`.
 
