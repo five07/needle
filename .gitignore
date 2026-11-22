@@ -9,6 +9,12 @@ tokens.json
 # Claude Code local settings
 .claude/settings.local.json
 
+# Development-only files: kept in develop, left out of main
+/.backlog/
+/.claude/
+/CLAUDE.md
+/PLAN.md
+
 # Build output
 /needle
 /bin/
