@@ -43,6 +43,12 @@ type Config struct {
 	Search, Library, Discovery, Queue, Account View
 	// Now returns the current time (tests replace it). Default time.Now.
 	Now func() time.Time
+	// Notices, when set, delivers texts from outside the UI (such as
+	// playback errors) to show as notices.
+	Notices <-chan string
+	// Services lets the default Search view search and play. Nil leaves
+	// search unavailable.
+	Services *Services
 }
 
 // NoticeMsg shows Text in the hint line for NoticeDuration.
@@ -71,11 +77,12 @@ type Model struct {
 	noticeID int
 	last     click
 	now      func() time.Time
+	notices  <-chan string
 }
 
 // New returns the shell with the given section views.
 func New(cfg Config) *Model {
-	m := &Model{now: cfg.Now, focus: paneSidebar}
+	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices}
 	if m.now == nil {
 		m.now = time.Now
 	}
@@ -84,7 +91,7 @@ func New(cfg Config) *Model {
 	for i, v := range roots {
 		if v == nil {
 			if i == int(SectionSearch) {
-				v = NewSearchView()
+				v = NewSearchView(cfg.Services)
 			} else {
 				v = &Placeholder{TitleText: names[i], Message: names[i] + " is not available yet."}
 			}
@@ -96,7 +103,25 @@ func New(cfg Config) *Model {
 }
 
 // Init implements tea.Model.
-func (m *Model) Init() tea.Cmd { return nil }
+func (m *Model) Init() tea.Cmd { return m.listen() }
+
+type noticeChanMsg struct{ text string }
+
+// listen waits for the next text on the notices channel. It returns nil
+// when there is no channel, and stops when the channel is closed.
+func (m *Model) listen() tea.Cmd {
+	if m.notices == nil {
+		return nil
+	}
+	ch := m.notices
+	return func() tea.Msg {
+		text, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return noticeChanMsg{text}
+	}
+}
 
 // current returns the view on top of the selected section.
 func (m *Model) current() View {
@@ -117,7 +142,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onWheel(msg.Mouse())
 	case NoticeMsg:
 		m.noticeID++
-		m.notice = msg.Text
+		m.notice = Sanitize(msg.Text)
 		id := m.noticeID
 		return m, tea.Tick(NoticeDuration, func(time.Time) tea.Msg { return clearNoticeMsg{id} })
 	case clearNoticeMsg:
@@ -128,7 +153,20 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.View != nil {
 			m.stacks[m.section] = append(m.stacks[m.section], msg.View)
 			m.focus = paneMain
+			if o, ok := msg.View.(Opener); ok {
+				return m, o.Open()
+			}
 		}
+	case ForViewMsg:
+		for _, stack := range m.stacks {
+			for _, v := range stack {
+				if v == msg.View {
+					return m, v.Update(msg.Msg)
+				}
+			}
+		}
+	case noticeChanMsg:
+		return m, tea.Batch(Notify(msg.text), m.listen())
 	case PopMsg:
 		m.pop()
 	default:

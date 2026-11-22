@@ -24,6 +24,12 @@ type KeyMap struct {
 	HalfUp   key.Binding
 	Open     key.Binding
 	Back     key.Binding
+
+	// Item actions (catalog views).
+	QueueAdd  key.Binding
+	PlayNext  key.Binding
+	NextGroup key.Binding
+	PrevGroup key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -44,6 +50,11 @@ var Keys = KeyMap{
 	HalfUp:   key.NewBinding(key.WithKeys("ctrl+u", "pgup"), key.WithHelp("ctrl+u", "half page up")),
 	Open:     key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "open or play")),
 	Back:     key.NewBinding(key.WithKeys("esc", "backspace"), key.WithHelp("esc", "back / leave input")),
+
+	QueueAdd:  key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add to queue")),
+	PlayNext:  key.NewBinding(key.WithKeys("A"), key.WithHelp("A", "play next")),
+	NextGroup: key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next group")),
+	PrevGroup: key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous group")),
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

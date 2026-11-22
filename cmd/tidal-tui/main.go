@@ -18,6 +18,8 @@ import (
 	"github.com/five07/tidal-tui/internal/config"
 	"github.com/five07/tidal-tui/internal/logging"
 	"github.com/five07/tidal-tui/internal/player"
+	"github.com/five07/tidal-tui/internal/queue"
+	"github.com/five07/tidal-tui/internal/stream"
 	"github.com/five07/tidal-tui/internal/tidal"
 	"github.com/five07/tidal-tui/internal/tui"
 	"github.com/five07/tidal-tui/internal/xdg"
@@ -39,6 +41,8 @@ type deps struct {
 	mpvDeviceHelp func(ctx context.Context) ([]byte, error)
 	// runUI runs the terminal UI until it quits.
 	runUI func(ctx context.Context, m tea.Model) error
+	// newEngine starts the audio engine on first playback.
+	newEngine func(ctx context.Context, cfg player.MPVConfig) (player.Engine, error)
 }
 
 var defaultDeps = deps{
@@ -48,6 +52,13 @@ var defaultDeps = deps{
 	},
 	mpvDeviceHelp: func(ctx context.Context) ([]byte, error) {
 		return player.MPVDeviceHelp(ctx, "")
+	},
+	newEngine: func(ctx context.Context, cfg player.MPVConfig) (player.Engine, error) {
+		m, err := player.StartMPV(ctx, cfg)
+		if err != nil {
+			return nil, err
+		}
+		return m, nil
 	},
 	newOAuth: auth.NewOAuth,
 	login: func(ctx context.Context, o *auth.OAuth, out io.Writer) (auth.Tokens, error) {
@@ -157,14 +168,56 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (%s).\n", user.Username, user.Country)
 
+	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, logger)
+	if err != nil {
+		logger.Error("ui setup failed", "err", err)
+		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		return 1
+	}
 	logger.Info("ui started")
-	if err := d.runUI(ctx, tui.New(tui.Config{})); err != nil && ctx.Err() == nil {
+	err = d.runUI(ctx, model)
+	stopPlayer()
+	if err != nil && ctx.Err() == nil {
 		logger.Error("ui failed", "err", err)
 		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
 		return 1
 	}
 	logger.Info("ui stopped")
 	return 0
+}
+
+// newUI builds the terminal UI with the catalog and a running player (which
+// starts mpv on first playback). stop ends the player and waits for it to
+// close mpv.
+func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client, user tidal.User,
+	logger *slog.Logger) (model tea.Model, stop func(), err error) {
+	catalog, err := tidal.NewCatalog(client, user.Country)
+	if err != nil {
+		return nil, nil, err
+	}
+	resolver, err := stream.NewResolver(client, cfg.Quality, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	q := queue.New[player.Track]()
+	p := player.New(playerConfig(d, cfg, resolver, q, logger))
+
+	uiCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if err := p.Run(uiCtx); err != nil && uiCtx.Err() == nil {
+			logger.Error("player stopped", "err", err)
+		}
+	}()
+	notices := make(chan string, 4)
+	go watchStatus(uiCtx, p, notices)
+
+	model = tui.New(tui.Config{
+		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Playback: &playback{q: q, p: p}, Logger: logger},
+		Notices:  notices,
+	})
+	return model, func() { cancel(); <-done }, nil
 }
 
 // account returns the logged-in user, running the browser login first when
@@ -221,4 +274,17 @@ func printDevices(ctx context.Context, d deps, stdout, stderr io.Writer) int {
 	}
 	player.WriteDeviceList(stdout, exclusive, shared, sharedErr)
 	return 0
+}
+
+// playerConfig configures the player for the audio settings in cfg.
+func playerConfig(d deps, cfg config.Config, r player.Resolver, q *queue.Queue[player.Track], logger *slog.Logger) player.Config {
+	mpvCfg := player.MPVConfig{Mode: cfg.Audio.Mode, Device: cfg.Audio.Device, Logger: logger}
+	return player.Config{
+		Mode:      cfg.Audio.Mode,
+		NewEngine: func(ctx context.Context) (player.Engine, error) { return d.newEngine(ctx, mpvCfg) },
+		Resolver:  r,
+		Queue:     q,
+		Prober:    player.NewProber(cfg.Audio.Mode, cfg.Audio.Device),
+		Logger:    logger,
+	}
 }

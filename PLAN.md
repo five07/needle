@@ -189,6 +189,30 @@ Layout and keymap follow `UI.md`. These are only the points where `UI.md` is sil
     - c) Reserve `←`/`→` for seeking now. Panes then switch with `h`/`l` and `tab` only, which changes TASK-009 #2.
     > MS: a
 
+### TASK-010 (search)
+
+27. **Playing for real.** AC #4 says Enter plays. The player (TASK-008) and queue (TASK-006) exist, but `cmd/tidal-tui` does not start them yet, and TASK-013 (bar and transport keys) does not mention wiring them.
+    - a) **(Recommended)** TASK-010 wires queue, resolver, and player into `cmd/tidal-tui` behind a small `tui.Playback` interface (play a list from an index, play next, add to queue). Enter really plays, and a notice in the hint line confirms each action ("Playing ...", "Queued ..."). The bar stays idle until TASK-013.
+    - b) TASK-010 defines the interface and tests it with a stub only. The binary gets a no-op that shows "Playback arrives in TASK-013", and TASK-013 does the wiring.
+    > MS: a
+
+28. **What Enter on a track queues.**
+    - a) **(Recommended)** The list it sits in, starting at that track: in search, the Tracks group; in an album or playlist, the whole track list (loaded pages). This matches how album playback usually works.
+    - b) Only the selected track, replacing the queue, everywhere.
+    - c) Only the selected track in search results; the whole list from that track in album and playlist views.
+    > MS: a
+
+29. **Play next / Add to queue on an album, artist, or playlist row.**
+    - a) **(Recommended)** Album and playlist rows fetch their tracks and queue all of them (in order, capped at 500 tracks with a notice when capped). On an artist row the keys do nothing and the hint shows "open the artist to queue tracks".
+    - b) Queue keys work on track rows only, everywhere.
+    - c) Like (a), and on an artist row queue the artist's top tracks.
+    > MS: a
+
+30. **How many results per group.** `searchResults` relationships return 20 items per page.
+    - a) **(Recommended)** Show the first page of each group (up to 20) in one grouped, scrolling list. `tab`/`shift+tab` jump to the next/previous group header. No "more" expansion in v1.
+    - b) Show 5 per group with a "more ..." row that expands the group in place and pages further on demand.
+    > MS: a
+
 ## DECISIONS
 
 These are the answers to the questions above. Backlog tasks are written to match them.
@@ -221,6 +245,10 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 24 | TUI tests | Drive the Bubble Tea model directly with an in-repo golden helper (`go test -update`). No teatest dependency. |
 | 25 | Notifications | Notice slot in the hint line (2 seconds) built in TASK-009; TASK-013 sends volume and transport notices. |
 | 26 | Arrow keys and New Items 2-4 | `←`/`→` switch panes in v1. Post-MVP tasks for scrubbing, a visualizer toggle, and EQ with presets. |
+| 27 | Search playback | TASK-010 wires queue, resolver, and player into `cmd/tidal-tui` behind `tui.Playback`; Enter really plays, with a notice per action. The bar stays idle until TASK-013. |
+| 28 | Enter on a track | Queues the list it sits in, starting at that track (search Tracks group, or the loaded album/playlist list). |
+| 29 | Queue keys on collection rows | Album and playlist rows queue all their tracks (capped at 500, with a notice). Artist rows do nothing and hint to open the artist. |
+| 30 | Results per group | First page per group (up to 20) in one grouped list; `tab`/`shift+tab` jump between groups. No "more" expansion in v1. |
 
 ## Definition of Done
 

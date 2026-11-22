@@ -32,10 +32,12 @@ func TestMain(m *testing.M) {
 type fakeTIDAL struct {
 	t   *testing.T
 	srv *httptest.Server
+	mux *http.ServeMux // more handlers can be added before requests
 
 	logins     atomic.Int32
 	loginErr   error
 	meStatus   int
+	meCountry  string
 	tokenReply string // token endpoint body; status 400 when it has "error"
 	lastBearer atomic.Value
 	uiRuns     atomic.Int32
@@ -43,14 +45,14 @@ type fakeTIDAL struct {
 }
 
 func newFakeTIDAL(t *testing.T) *fakeTIDAL {
-	f := &fakeTIDAL{t: t, meStatus: 200}
 	mux := http.NewServeMux()
+	f := &fakeTIDAL{t: t, meStatus: 200, meCountry: "US", mux: mux}
 	mux.HandleFunc("/v2/users/me", func(w http.ResponseWriter, r *http.Request) {
 		f.lastBearer.Store(r.Header.Get("Authorization"))
 		w.Header().Set("Content-Type", "application/vnd.api+json")
 		w.WriteHeader(f.meStatus)
 		if f.meStatus == 200 {
-			io.WriteString(w, `{"data":{"id":"42","type":"users","attributes":{"username":"listener","country":"US","email":"l@example.com"}}}`)
+			io.WriteString(w, `{"data":{"id":"42","type":"users","attributes":{"username":"listener","country":"`+f.meCountry+`","email":"l@example.com"}}}`)
 		}
 	})
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {

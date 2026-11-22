@@ -1,7 +1,7 @@
 ┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
 │ ▸ Search      │ Search: artists, albums, tracks, playlists                   │
 │   Library     │ ──────────────────────────────────────────────────────────── │
-│   Discovery   │ Search is not available yet.                                 │
+│   Discovery   │ Search is not available.                                     │
 │   Queue       │                                                              │
 │   Account     │                                                              │
 │               │                                                              │

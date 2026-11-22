@@ -1,0 +1,18 @@
+┌ tidal-tui ────────────────────────────── ? help ─ q quit ┐
+│ S │ Search: daft punk                                    │
+│ L │ ──────────────────────────────────────────────────── │
+│ D │ TRACKS                                               │
+│ Q │   One More Time     Daft Punk    Discovery      5:20 │
+│ A │   Harder, Better,…  Daft Punk    Discovery      3:44 │
+│   │   Get Lucky (feat…  Daft Punk,…  Random A…      6:09 │
+│   │ ALBUMS                                               │
+├───┴──────────────────────────────────────────────────────┤
+│                                                          │
+│                                                          │
+│                     Nothing playing                      │
+│                                                          │
+│                                                          │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│ j/k move · h back · enter play/open · a add to queue     │
+└──────────────────────────────────────────────────────────┘

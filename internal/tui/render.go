@@ -124,11 +124,22 @@ func (m *Model) hintLine(w int) string {
 		hints = append(hints, m.current().Bindings()...)
 		hints = append(hints, hint("/", "search"), hint("?", "help"), hint("q", "quit"))
 	}
-	parts := make([]string, 0, len(hints))
-	for _, h := range hints {
-		parts = append(parts, styleKey.Render(h.Help().Key)+" "+h.Help().Desc)
+	// Whole hints only: the ones that do not fit are left out (the help
+	// overlay lists them all).
+	line, used := " ", 1
+	for i, h := range hints {
+		part := h.Help().Key + " " + h.Help().Desc
+		sep := ""
+		if i > 0 {
+			sep = " · "
+		}
+		if used+len(sep)+ansi.StringWidth(part) > w && i > 0 {
+			break
+		}
+		line += sep + styleKey.Render(h.Help().Key) + " " + h.Help().Desc
+		used += len(sep) + ansi.StringWidth(part)
 	}
-	return fit(" "+strings.Join(parts, " · "), w)
+	return fit(line, w)
 }
 
 // helpLines draws the help overlay: global, navigation, and the current

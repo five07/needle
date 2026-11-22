@@ -52,12 +52,36 @@ type PopMsg struct{}
 // Push returns a command that opens v as a sub-view.
 func Push(v View) tea.Cmd { return func() tea.Msg { return PushMsg{View: v} } }
 
+// Opener is implemented by views that start work (such as loading) when
+// they are pushed. The shell runs the returned command after the push.
+type Opener interface {
+	Open() tea.Cmd
+}
+
+// ForViewMsg carries Msg to View wherever View is in the section stacks,
+// so a result reaches the view that asked for it even after the user
+// switched sections or opened another view. It is dropped when View has
+// been closed. Views must be pointers so they compare by identity.
+type ForViewMsg struct {
+	View View
+	Msg  tea.Msg
+}
+
+// To returns a command that runs f off the UI goroutine and delivers its
+// result to v.
+func To(v View, f func() tea.Msg) tea.Cmd {
+	return func() tea.Msg { return ForViewMsg{View: v, Msg: f()} }
+}
+
 // List is a scrollable, selectable list of rows. Views embed it.
 type List struct {
 	rows   []string
 	cursor int
 	offset int
 	height int
+	// heading, when set, marks group heading rows: drawn as headings and
+	// never highlighted as selected.
+	heading func(i int) bool
 }
 
 // SetRows replaces the rows, keeping the cursor in range. Rows are plain
@@ -156,7 +180,9 @@ func (l *List) Render(width, height int, focused bool) string {
 			break
 		}
 		line := fit(l.rows[i], width)
-		if i == l.cursor {
+		if l.heading != nil && l.heading(i) {
+			line = styleHeading.Render(line)
+		} else if i == l.cursor {
 			if focused {
 				line = styleSelected.Render(line)
 			} else {

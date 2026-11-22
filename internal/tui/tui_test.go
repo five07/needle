@@ -674,25 +674,6 @@ func TestListViewEdges(t *testing.T) {
 	}
 }
 
-func TestSearchBody(t *testing.T) {
-	s := NewSearchView()
-	body := NewListView("Results", []string{"r1", "r2", "r3"})
-	opened := -1
-	body.OnOpen = func(i int) tea.Cmd { opened = i; return nil }
-	s.Body = body
-	out := ansi.Strip(s.Render(30, 5, true))
-	if !strings.Contains(out, "r1") || strings.Contains(out, "not available") {
-		t.Errorf("render = %q", out)
-	}
-	s.Update(press("j"))
-	s.Update(WheelMsg{Delta: 1})
-	s.Update(ClickMsg{Y: 4, Double: true}) // row 2 of the body
-	if body.Cursor() != 2 || opened != 2 {
-		t.Errorf("cursor %d opened %d", body.Cursor(), opened)
-	}
-	s.Update(customMsg{}) // forwarded to the input, harmless
-}
-
 func TestSanitize(t *testing.T) {
 	tests := map[string]string{
 		"plain":                 "plain",

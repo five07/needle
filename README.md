@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, and the terminal UI shell are in place. The Search, Library, Discovery, Queue, and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, and Search (with playback from results) are in place. The Library, Discovery, Queue, and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -54,7 +54,7 @@ After login, tidal-tui prints the account name and opens the terminal UI.
 
 The screen has a sidebar of sections (Search, Library, Discovery, Queue, Account), a main pane for the selected section, a now-playing bar, and a line of key hints. It needs at least 50x16 cells and is laid out for 80x24 and larger. Below 80 columns the sidebar shrinks to a strip of initials. In a smaller terminal it shows "Terminal too small" until the window grows again.
 
-Sections that are not built yet say so in the main pane. Until playback is connected to the UI, the bar shows "Nothing playing".
+Sections that are not built yet say so in the main pane. Until the now-playing bar is built, the bar shows "Nothing playing"; playing and queueing are confirmed by a short notice in the hint line instead, and playback errors (for example a missing mpv) appear there too.
 
 ### Keys
 
@@ -65,7 +65,10 @@ Sections that are not built yet say so in the main pane. Until playback is conne
 | `l` / `→`, `enter` (sidebar) | Focus the main pane |
 | `g` / `G` | Jump to the top / bottom |
 | `ctrl+d` / `ctrl+u` | Half a page down / up |
-| `enter` | Open or play the selected item |
+| `enter` | Play the selected track, or open the selected album, artist, or playlist |
+| `a` | Add the selected track, album, or playlist to the end of the queue |
+| `A` | Play the selected track, album, or playlist next |
+| `tab` / `shift+tab` | Jump to the next / previous group of results |
 | `esc`, `backspace` | Go back, or leave the search input |
 | `/` | Go to Search and type a query |
 | `1` to `5` | Jump to a sidebar section |
@@ -74,6 +77,17 @@ Sections that are not built yet say so in the main pane. Until playback is conne
 | `ctrl+c` | Quit, even while typing |
 
 While the search input has focus, letters type into it, so `q`, `j`, and the other single-letter keys do not act. Press `esc` (or `enter`) to leave the input.
+
+The hint line shows as many keys as fit; `?` lists them all.
+
+### Search
+
+Type in the search input and results appear after a short pause (300 ms), or press `enter` to search at once. Results are grouped as Tracks, Albums, Artists, and Playlists, with the first 20 of each. Only the newest search is shown: an older request still in flight is canceled, and a late answer to it is ignored. Searching never interrupts playback, and a search keeps running if you switch to another section.
+
+- **Enter on a track** replaces the queue with the tracks of the list it is in (the Tracks group, or the album or playlist), starting at that track.
+- **`a` and `A`** queue one track, or every track of an album or playlist, up to 500 tracks (a notice says when the rest were left out). On an empty queue the first queued track starts playing. Artists are not queued directly: open the artist and queue its tracks.
+- **Opening an album or playlist** shows its tracks, loading more as you scroll toward the end. **Opening an artist** shows their top tracks, then their albums.
+- Search uses your account's country, so results match what you can play.
 
 ### Mouse
 

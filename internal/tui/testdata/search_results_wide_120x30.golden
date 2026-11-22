@@ -1,0 +1,30 @@
+┌ tidal-tui ────────────────────────────────────────────────────────────────────────────────────────── ? help ─ q quit ┐
+│ ▸ Search      │ Search: daft punk                                                                                    │
+│   Library     │ ──────────────────────────────────────────────────────────────────────────────────────────────────── │
+│   Discovery   │ TRACKS                                                                                               │
+│   Queue       │   One More Time                           Daft Punk                  Discovery                  5:20 │
+│   Account     │   Harder, Better, Faster, Stronger        Daft Punk                  Discovery                  3:44 │
+│               │   Get Lucky (feat. Pharrell Williams)     Daft Punk, Pharrell Will…  Random Access Memori…      6:09 │
+│               │ ALBUMS                                                                                               │
+│               │   Discovery                                   Daft Punk                     2001                     │
+│               │   Random Access Memories                      Daft Punk                     2013                     │
+│               │ ARTISTS                                                                                              │
+│               │   Daft Punk                                                                                          │
+│               │ PLAYLISTS                                                                                            │
+│               │   Daft Punk Essentials                        TIDAL                         40 tracks                │
+│               │                                                                                                      │
+│               │                                                                                                      │
+│               │                                                                                                      │
+│               │                                                                                                      │
+│               │                                                                                                      │
+│               │                                                                                                      │
+├───────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                   Nothing playing                                                    │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ j/k move · h back · enter play/open · a add to queue · A play next · tab next group · shift+tab previous group       │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

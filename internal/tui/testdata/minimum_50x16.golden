@@ -1,7 +1,7 @@
 ┌ tidal-tui ──────────────────── ? help ─ q quit ┐
 │ S │ Search: artists, albums, tracks, playlists │
 │ L │ ────────────────────────────────────────── │
-│ D │ Search is not available yet.               │
+│ D │ Search is not available.                   │
 │ Q │                                            │
 │ A │                                            │
 ├───┴────────────────────────────────────────────┤
@@ -12,5 +12,5 @@
 │                                                │
 │                                                │
 ├────────────────────────────────────────────────┤
-│ j/k move · enter open · / search · ? help · q …│
+│ j/k move · enter open · / search · ? help      │
 └────────────────────────────────────────────────┘
