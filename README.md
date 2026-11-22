@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, and the audio engine are in place; the UI is not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, and the terminal UI shell are in place. The Search, Library, Discovery, Queue, and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -48,7 +48,36 @@ To log out and remove stored credentials from both the keyring and the file:
 ./tidal-tui -logout
 ```
 
-Until the terminal UI is built, launching tidal-tui logs in if needed, prints the account name, and exits.
+After login, tidal-tui prints the account name and opens the terminal UI.
+
+## Using the terminal UI
+
+The screen has a sidebar of sections (Search, Library, Discovery, Queue, Account), a main pane for the selected section, a now-playing bar, and a line of key hints. It needs at least 50x16 cells and is laid out for 80x24 and larger. Below 80 columns the sidebar shrinks to a strip of initials. In a smaller terminal it shows "Terminal too small" until the window grows again.
+
+Sections that are not built yet say so in the main pane. Until playback is connected to the UI, the bar shows "Nothing playing".
+
+### Keys
+
+| Key | Action |
+|---|---|
+| `j` / `k`, `↓` / `↑` | Move down / up |
+| `h` / `←` | Focus the sidebar, or go back from an opened item |
+| `l` / `→`, `enter` (sidebar) | Focus the main pane |
+| `g` / `G` | Jump to the top / bottom |
+| `ctrl+d` / `ctrl+u` | Half a page down / up |
+| `enter` | Open or play the selected item |
+| `esc`, `backspace` | Go back, or leave the search input |
+| `/` | Go to Search and type a query |
+| `1` to `5` | Jump to a sidebar section |
+| `?` | Show or hide every key for the current screen (`j`/`k` scroll it when it does not fit) |
+| `q` | Quit |
+| `ctrl+c` | Quit, even while typing |
+
+While the search input has focus, letters type into it, so `q`, `j`, and the other single-letter keys do not act. Press `esc` (or `enter`) to leave the input.
+
+### Mouse
+
+Click a sidebar section to switch to it, or a row to select it. Double-click opens or plays. The scroll wheel scrolls the list under the pointer. Clicking anywhere closes the help.
 
 ## Playback
 

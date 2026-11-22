@@ -154,6 +154,41 @@ Background for these questions is in backlog doc `doc-003` (audio spike with the
     - c) No software volume in either mode for v1.
     > MS: a, but tag a post-MVP that allow the user to choose "volume on your output device" or "allow this computer volume to also control volume" - something like that
 
+### TASK-009 (TUI shell)
+
+Layout and keymap follow `UI.md`. These are only the points where `UI.md` is silent, contradicts itself, or meets the New Items list.
+
+21. **What the binary does after TASK-009.** Today `tidal-tui` logs in, prints the account name, and exits.
+    - a) **(Recommended)** After login, open the TUI shell. Views are placeholders until their tickets land (Search in TASK-010, and so on), and the now-playing bar shows "Nothing playing" until TASK-013 connects the player. `q` quits.
+    - b) Keep the current behavior. The shell is exercised only by tests until TASK-014 wires it in.
+    > MS: a
+
+22. **Narrow terminals.** The `UI.md` drawing shows the full 15-column sidebar at 80 columns, but region 6 guesses the sidebar collapses below about 100 columns.
+    - a) **(Recommended)** Full sidebar at 80 columns and wider, as drawn. Below 80 columns it collapses to a 3-column letter strip (`S L D Q A`). Below 50x16 the app shows "Terminal too small (needs 50x16)" in place of the layout.
+    - b) Collapse the sidebar below 100 columns, as region 6 says, giving the main pane the space at 80x24.
+    > MS: a
+
+23. **Now-playing bar when idle.** The bar takes 6 rows, leaving 13 rows for the lists at 80x24.
+    - a) **(Recommended)** Always 6 rows, with "Nothing playing" centered when idle. The layout never jumps when playback starts or stops.
+    - b) Shrink to one row when idle, so lists get 5 more rows until something plays.
+    > MS: a
+
+24. **Test tooling.** The ticket asks for teatest/golden tests. The Charm v2 stack has releases (`charm.land/bubbletea/v2` v2.1.2, `lipgloss/v2` v2.1.1, `bubbles/v2` v2.2.2), but teatest v2 exists only as unreleased commits (`github.com/charmbracelet/x/exp/teatest/v2`, newest dated 2026-11-22).
+    - a) **(Recommended)** Drive the Bubble Tea model directly in tests (send key, mouse, and resize messages to `Update`, compare `View` output) with a small in-repo golden-file helper (`go test -update`). No test-only dependency.
+    - b) Use teatest v2, pinned to an older commit.
+    > MS: a
+
+25. **Notifications (New Items 1).** `UI.md` section 7 puts short messages in the hint line for about 2 seconds. New Items 1 wants a cliamp-style notice for volume and transport changes.
+    - a) **(Recommended)** Build the notice slot in TASK-009: a generic notify call that shows text in the hint line for 2 seconds, then restores the hints. TASK-013 sends volume and transport notices through it.
+    - b) Leave notices to TASK-013.
+    > MS: a
+
+26. **Arrow-key scrubbing (New Items 2) and post-MVP items (New Items 3 and 4).** TASK-009 #2 makes `←`/`→` switch panes, and decision 8 says no seeking in v1, so arrow-key scrubbing would clash with both.
+    - a) **(Recommended)** Keep `←`/`→` for panes in v1. Create post-MVP backlog tasks for scrubbing (with a key to be chosen then, such as `,`/`.`), the visualizer toggle (New Items 3), and EQ with presets (New Items 4).
+    - b) Keep `←`/`→` for panes, and leave the New Items for a later planning pass.
+    - c) Reserve `←`/`→` for seeking now. Panes then switch with `h`/`l` and `tab` only, which changes TASK-009 #2.
+    > MS: a
+
 ## DECISIONS
 
 These are the answers to the questions above. Backlog tasks are written to match them.
@@ -180,6 +215,12 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 18 | Source bit depth | From the manifest representation id (`FLAC_HIRES,192000,24`); show the sample rate alone if it doesn't parse. |
 | 19 | Exclusive device | Must be an explicit ALSA device; `auto` with exclusive is a config error. Add `tidal-tui -list-devices`. |
 | 20 | Software volume | Disabled in exclusive mode (UI says volume is on the DAC/amp); allowed in shared mode, "rate matched" only at 100%. A post-MVP setting to choose device or software volume is TASK-018. |
+| 21 | Binary after TASK-009 | After login, open the TUI shell. Views are placeholders until their tickets land; the bar shows "Nothing playing" until TASK-013. |
+| 22 | Narrow terminals | Full sidebar at 80 columns and wider; a 3-column letter strip below 80; "Terminal too small (needs 50x16)" below 50x16. |
+| 23 | Idle now-playing bar | Always 6 rows, "Nothing playing" centered when idle. |
+| 24 | TUI tests | Drive the Bubble Tea model directly with an in-repo golden helper (`go test -update`). No teatest dependency. |
+| 25 | Notifications | Notice slot in the hint line (2 seconds) built in TASK-009; TASK-013 sends volume and transport notices. |
+| 26 | Arrow keys and New Items 2-4 | `←`/`→` switch panes in v1. Post-MVP tasks for scrubbing, a visualizer toggle, and EQ with presets. |
 
 ## Definition of Done
 

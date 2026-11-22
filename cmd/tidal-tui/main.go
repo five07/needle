@@ -13,11 +13,13 @@ import (
 	"os/signal"
 	"path/filepath"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/five07/tidal-tui/internal/auth"
 	"github.com/five07/tidal-tui/internal/config"
 	"github.com/five07/tidal-tui/internal/logging"
 	"github.com/five07/tidal-tui/internal/player"
 	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/tidal-tui/internal/tui"
 	"github.com/five07/tidal-tui/internal/xdg"
 )
 
@@ -35,9 +37,15 @@ type deps struct {
 	asoundRoot string
 	// mpvDeviceHelp returns `mpv --audio-device=help` output.
 	mpvDeviceHelp func(ctx context.Context) ([]byte, error)
+	// runUI runs the terminal UI until it quits.
+	runUI func(ctx context.Context, m tea.Model) error
 }
 
 var defaultDeps = deps{
+	runUI: func(ctx context.Context, m tea.Model) error {
+		_, err := tea.NewProgram(m, tea.WithContext(ctx)).Run()
+		return err
+	},
 	mpvDeviceHelp: func(ctx context.Context) ([]byte, error) {
 		return player.MPVDeviceHelp(ctx, "")
 	},
@@ -149,8 +157,13 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (%s).\n", user.Username, user.Country)
 
-	// The interactive UI arrives in TASK-014.
-	fmt.Fprintln(stderr, "tidal-tui: the terminal UI is not implemented yet")
+	logger.Info("ui started")
+	if err := d.runUI(ctx, tui.New(tui.Config{})); err != nil && ctx.Err() == nil {
+		logger.Error("ui failed", "err", err)
+		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+		return 1
+	}
+	logger.Info("ui stopped")
 	return 0
 }
 

@@ -1,0 +1,24 @@
+┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
+│                                                                              │
+│                                                                              │
+│      ╭───────────────────────────────────────────────────────────────╮       │
+│      │ Global                          Navigation                    │       │
+│      │ ?       toggle this help        k/↑     move up               │       │
+│      │ /       search                  j/↓     move down             │       │
+│      │ 1-5     jump to section         h/←     sidebar or back       │       │
+│      │ q       quit                    l/→     main pane             │       │
+│      │ ctrl+c  quit (even in input)    g       jump to top           │       │
+│      │                                 G       jump to bottom        │       │
+│      │                                 ctrl+d  half page down        │       │
+│      │                                 ctrl+u  half page up          │       │
+│      │                                 enter   open or play          │       │
+│      │                                 esc     back / leave input    │       │
+│      │                                                               │       │
+│      │                                 Search                        │       │
+│      │                                 enter   search (in the input) │       │
+│      ╰───────────────────────────────────────────────────────────────╯       │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+│ esc close help                                                               │
+└──────────────────────────────────────────────────────────────────────────────┘

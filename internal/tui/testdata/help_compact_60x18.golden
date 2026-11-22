@@ -1,0 +1,18 @@
+┌ tidal-tui ────────────────────────────── ? help ─ q quit ┐
+│             ╭──────────────────────────────╮             │
+│             │                              │             │
+│             │ Global                       │             │
+│             │ ?       toggle this help     │             │
+│             │ /       search               │             │
+│             │ 1-5     jump to section      │             │
+│             │ q       quit                 │             │
+│             │ ctrl+c  quit (even in input) │             │
+│             │                              │             │
+│             │ Navigation                   │             │
+│             │ k/↑     move up              │             │
+│             │ j/↓     move down            │             │
+│             │ h/←     sidebar or back      │             │
+│             │ ↓ more (j)                   │             │
+│             ╰──────────────────────────────╯             │
+│ j/k scroll · esc close help                              │
+└──────────────────────────────────────────────────────────┘

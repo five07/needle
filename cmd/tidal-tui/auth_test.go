@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/zalando/go-keyring"
 
 	"github.com/five07/tidal-tui/internal/auth"
@@ -37,6 +38,8 @@ type fakeTIDAL struct {
 	meStatus   int
 	tokenReply string // token endpoint body; status 400 when it has "error"
 	lastBearer atomic.Value
+	uiRuns     atomic.Int32
+	uiErr      error
 }
 
 func newFakeTIDAL(t *testing.T) *fakeTIDAL {
@@ -64,6 +67,10 @@ func newFakeTIDAL(t *testing.T) *fakeTIDAL {
 
 func (f *fakeTIDAL) deps() deps {
 	return deps{
+		runUI: func(context.Context, tea.Model) error {
+			f.uiRuns.Add(1)
+			return f.uiErr
+		},
 		mpvDeviceHelp: func(context.Context) ([]byte, error) {
 			return []byte("  'auto' (Autoselect device)\n  'pipewire/alsa_output.usb-x' (USB DAC)\n"), nil
 		},

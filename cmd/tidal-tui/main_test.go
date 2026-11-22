@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -71,7 +72,6 @@ func TestRun(t *testing.T) {
 			env:        map[string]string{"TIDAL_CLIENT_ID": "envid"},
 			config:     "quality = \"lossless\"\n[audio]\nmode = \"exclusive\"\ndevice = \"alsa/hw:CARD=Vestri,DEV=0\"\n",
 			wantStdout: "Logged in as listener (US).\n",
-			wantStderr: "not implemented yet",
 			wantLog:    []string{"quality=lossless", "audio_mode=exclusive", `audio_device="alsa/hw:CARD=Vestri,DEV=0"`, "client_id_set=true"},
 		},
 		{
@@ -241,6 +241,41 @@ func TestListDevices(t *testing.T) {
 				}
 			}
 			if !strings.Contains(stderr.String(), tt.wantStderr) {
+				t.Errorf("stderr = %q", stderr.String())
+			}
+		})
+	}
+}
+
+func TestRunOpensUIAfterLogin(t *testing.T) {
+	tests := []struct {
+		name     string
+		args     []string
+		uiErr    error
+		wantRuns int32
+		wantCode int
+	}{
+		{name: "logged in", wantRuns: 1},
+		{name: "ui error", uiErr: errors.New("no tty"), wantRuns: 1, wantCode: 1},
+		{name: "version", args: []string{"-version"}},
+		{name: "logout", args: []string{"-logout"}},
+		{name: "list devices", args: []string{"-list-devices"}, wantCode: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			getenv, _, _ := testEnv(t, map[string]string{"TIDAL_CLIENT_ID": "id"})
+			f := newFakeTIDAL(t)
+			f.uiErr = tt.uiErr
+			d := f.deps()
+			d.asoundRoot = t.TempDir()
+			var stdout, stderr bytes.Buffer
+			if code := run(context.Background(), d, tt.args, getenv, &stdout, &stderr); code != tt.wantCode {
+				t.Fatalf("code = %d, stderr %s", code, stderr.String())
+			}
+			if got := f.uiRuns.Load(); got != tt.wantRuns {
+				t.Errorf("ui runs = %d, want %d", got, tt.wantRuns)
+			}
+			if tt.uiErr != nil && !strings.Contains(stderr.String(), "no tty") {
 				t.Errorf("stderr = %q", stderr.String())
 			}
 		})
