@@ -502,3 +502,89 @@ func TestRevisionChangesOnEveryEdit(t *testing.T) {
 		t.Error("a read changed the revision")
 	}
 }
+
+func isAuto(s string) bool { return strings.HasPrefix(s, "~") }
+
+func TestAddBefore(t *testing.T) {
+	q := newQueue("a", "b", "~r1", "~r2")
+	before := q.Revision()
+	q.AddBefore("c", isAuto)
+	q.AddBefore("d", isAuto)
+	if got := render(q); got != " [a] b,c,d,~r1,~r2" {
+		t.Errorf("got %q", got)
+	}
+	if q.Revision() == before {
+		t.Error("revision unchanged")
+	}
+	// Turning shuffle off keeps them ahead of the autoplayed entries.
+	q.SetShuffle(true)
+	q.SetShuffle(false)
+	if got := render(q); got != " [a] b,c,d,~r1,~r2" {
+		t.Errorf("after unshuffle %q", got)
+	}
+	// No match: a plain append. Played entries never match.
+	p := newQueue("~x", "y")
+	p.Next()
+	p.AddBefore("z", isAuto)
+	if got := render(p); got != "~x [y] z" {
+		t.Errorf("no match: %q", got)
+	}
+	// Empty queue: it becomes current.
+	e := newQueue()
+	e.AddBefore("a", isAuto)
+	if got := render(e); got != " [a] " {
+		t.Errorf("empty: %q", got)
+	}
+}
+
+func TestAddBeforeWhileShuffled(t *testing.T) {
+	q := newQueue("a", "b", "c", "~r1", "~r2")
+	q.SetShuffle(true)
+	first := -1
+	for i, e := range q.Snapshot().Upcoming {
+		if isAuto(e.Item) {
+			first = i
+			break
+		}
+	}
+	q.AddBefore("n", isAuto)
+	up := q.Snapshot().Upcoming
+	if up[first].Item != "n" {
+		t.Errorf("upcoming %v: n not at %d", up, first)
+	}
+}
+
+func TestRemoveUpcoming(t *testing.T) {
+	q := newQueue("~h", "a", "~r1", "b", "~r2")
+	q.Next() // ~h is history, a is current
+	q.Next()
+	q.Previous()
+	before := q.Revision()
+	if n := q.RemoveUpcoming(isAuto); n != 2 {
+		t.Errorf("removed %d", n)
+	}
+	if got := render(q); got != "~h [a] b" {
+		t.Errorf("got %q", got)
+	}
+	if q.Revision() == before {
+		t.Error("revision unchanged")
+	}
+	// The original order lost them too.
+	q.SetShuffle(true)
+	q.SetShuffle(false)
+	if got := render(q); got != "~h [a] b" {
+		t.Errorf("after unshuffle %q", got)
+	}
+	before = q.Revision()
+	if n := q.RemoveUpcoming(isAuto); n != 0 || q.Revision() != before {
+		t.Errorf("nothing to remove: %d, revision changed %v", n, q.Revision() != before)
+	}
+	if n := newQueue().RemoveUpcoming(isAuto); n != 0 {
+		t.Errorf("empty queue: %d", n)
+	}
+	// The current entry is never removed.
+	c := newQueue("~cur", "~next")
+	if n := c.RemoveUpcoming(isAuto); n != 1 || render(c) != " [~cur] " {
+		t.Errorf("current: %d %q", n, render(c))
+	}
+}

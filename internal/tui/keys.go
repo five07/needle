@@ -47,6 +47,7 @@ type KeyMap struct {
 	PrevTrack key.Binding
 	Shuffle   key.Binding
 	Repeat    key.Binding
+	Autoplay  key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -86,10 +87,11 @@ var Keys = KeyMap{
 	PrevTrack: key.NewBinding(key.WithKeys("p", "["), key.WithHelp("p/[", "previous track")),
 	Shuffle:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "shuffle on/off")),
 	Repeat:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "repeat off/all/one")),
+	Autoplay:  key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "autoplay radio on/off")),
 }
 
 func (k KeyMap) playbackGroup() helpGroup {
-	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat}}
+	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay}}
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

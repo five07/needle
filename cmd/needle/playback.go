@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/five07/needle/internal/config"
@@ -35,6 +36,59 @@ type playback struct {
 	// changed, when set (capacity 1), is signaled after each queue edit
 	// so watchStatus sends a new snapshot.
 	changed chan struct{}
+	// autoplay is the autoplay switch (decision 62); autoplayGen counts
+	// its changes, so a radio fetched before one is not used.
+	autoplay    atomic.Bool
+	autoplayGen atomic.Uint64
+}
+
+func isAutoplayed(t player.Track) bool { return t.Autoplay }
+
+// Autoplay reports whether autoplay is on.
+func (b *playback) Autoplay() bool { return b.autoplay.Load() }
+
+// SetAutoplay implements tui.Transport. Turning it off removes the upcoming
+// autoplayed tracks; the current one finishes (decision 65).
+func (b *playback) SetAutoplay(ctx context.Context, on bool) error {
+	b.autoplay.Store(on)
+	b.autoplayGen.Add(1)
+	removed := 0
+	if !on {
+		removed = b.q.RemoveUpcoming(isAutoplayed)
+	}
+	b.edited()
+	if removed > 0 {
+		return b.p.QueueChanged(ctx)
+	}
+	return nil
+}
+
+// addAutoplayed appends radio tracks as autoplayed entries, leaving out
+// tracks already in the queue, and returns how many it added.
+func (b *playback) addAutoplayed(tracks []tidal.Track) int {
+	s := b.q.Snapshot()
+	have := map[string]bool{}
+	for _, e := range s.History {
+		have[e.Item.ID] = true
+	}
+	if s.Current != nil {
+		have[s.Current.Item.ID] = true
+	}
+	for _, e := range s.Upcoming {
+		have[e.Item.ID] = true
+	}
+	n := 0
+	for _, t := range tracks {
+		if have[t.ID] {
+			continue
+		}
+		have[t.ID] = true
+		pt := toTrack(t)
+		pt.Autoplay = true
+		b.q.Add(pt)
+		n++
+	}
+	return n
 }
 
 // edited signals a queue change without blocking.
@@ -85,12 +139,12 @@ func (b *playback) PlayNext(ctx context.Context, tracks []tidal.Track) error {
 	return b.p.QueueChanged(ctx)
 }
 
-// Add appends tracks to the queue. On an empty queue the first one starts
-// playing.
+// Add appends tracks to the queue, ahead of any upcoming autoplayed ones
+// (decision 66). On an empty queue the first one starts playing.
 func (b *playback) Add(ctx context.Context, tracks []tidal.Track) error {
 	_, had := b.q.Current()
 	for _, t := range tracks {
-		b.q.Add(toTrack(t))
+		b.q.AddBefore(toTrack(t), isAutoplayed)
 	}
 	b.edited()
 	if !had && len(tracks) > 0 {
@@ -188,7 +242,9 @@ type watch struct {
 	mpris interface{ Update(mpris.State) }
 	// saved, when set, keeps the queue file up to date (decision 60).
 	saved *savedQueue
-	now   func() time.Time // default time.Now
+	// auto, when set, continues the queue with radio (decision 63).
+	auto *autoplay
+	now  func() time.Time // default time.Now
 }
 
 // watchStatus forwards player changes to the UI until ctx ends. It is the
@@ -205,10 +261,24 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 			return
 		case <-p.Updates():
 		case <-w.changed:
+		case r := <-w.auto.done():
+			if msg := w.auto.apply(ctx, r); msg != "" {
+				select {
+				case w.notices <- msg:
+				case <-ctx.Done():
+					return
+				}
+			}
 		}
 		st := p.Status()
+		var snap queue.Snapshot[player.Track]
+		if w.q != nil {
+			snap = w.q.Snapshot()
+			w.auto.check(ctx, st, snap)
+		}
 		if w.status != nil || w.mpris != nil {
-			np := nowPlaying(st, w.q.Snapshot(), w.mode)
+			np := nowPlaying(st, snap, w.mode)
+			np.Autoplay = w.auto != nil && w.auto.b.Autoplay()
 			if w.mpris != nil {
 				w.mpris.Update(mprisState(np, st.Volume))
 			}
@@ -302,7 +372,8 @@ func nowPlaying(st player.Status, s queue.Snapshot[player.Track], mode config.Au
 
 func queueItem(e queue.Entry[player.Track]) tui.QueueItem {
 	t := e.Item
-	return tui.QueueItem{Handle: uint64(e.Handle), Track: tui.QueueTrack{ID: t.ID, Title: t.Title, Artists: t.Artists, Album: t.Album, Duration: t.Duration}}
+	return tui.QueueItem{Handle: uint64(e.Handle), Track: tui.QueueTrack{ID: t.ID, Title: t.Title, Artists: t.Artists, Album: t.Album,
+		Duration: t.Duration, Autoplay: t.Autoplay}}
 }
 
 // shortFormat writes bit depth and rate the way the bar shows them:

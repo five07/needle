@@ -10,7 +10,7 @@ import (
 )
 
 var testAccount = AccountInfo{Username: "listener", Country: "US", Email: "listener@example.com", EmailVerified: true,
-	Quality: "hires", AudioMode: "exclusive", AudioDevice: "alsa/hw:CARD=DAC,DEV=0"}
+	Quality: "hires", AudioMode: "exclusive", AudioDevice: "alsa/hw:CARD=DAC,DEV=0", Autoplay: true}
 
 func TestAccountGoldens(t *testing.T) {
 	tests := []struct {

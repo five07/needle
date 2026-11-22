@@ -49,6 +49,7 @@ func TestLoad(t *testing.T) {
 			name: "all keys overridden",
 			body: new(`
 quality = "lossless"
+autoplay = true
 
 [audio]
 mode = "exclusive"
@@ -58,10 +59,16 @@ device = "alsa/hw:1,0"
 client_id = "abc_DEF-123.x"
 `),
 			want: Config{
-				Quality: QualityLossless,
-				Audio:   Audio{Mode: AudioExclusive, Device: "alsa/hw:1,0"},
-				Auth:    Auth{ClientID: "abc_DEF-123.x"},
+				Quality:  QualityLossless,
+				Autoplay: true,
+				Audio:    Audio{Mode: AudioExclusive, Device: "alsa/hw:1,0"},
+				Auth:     Auth{ClientID: "abc_DEF-123.x"},
 			},
+		},
+		{
+			name:       "autoplay must be a boolean",
+			body:       new(`autoplay = "yes"`),
+			wantErrSub: "autoplay",
 		},
 		{
 			name: "partial override keeps other defaults",

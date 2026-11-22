@@ -20,6 +20,8 @@ type Track struct {
 	Artists  string
 	Album    string
 	Duration time.Duration
+	// Autoplay marks a track that autoplay added from radio (decision 64).
+	Autoplay bool
 }
 
 // Resolver turns track IDs into manifests. *stream.Resolver implements it.
@@ -62,6 +64,9 @@ type Status struct {
 	// still shown twice.
 	Notice   string
 	NoticeID uint64
+	// EndOfQueue is set when playback stopped because the queue ran out
+	// (repeat off), not because it was stopped, so autoplay can go on.
+	EndOfQueue bool
 }
 
 // Config configures a Player.
@@ -213,7 +218,9 @@ func (p *Player) Next(ctx context.Context) error {
 	return p.do(ctx, func(rctx context.Context) error {
 		p.skipped = 0
 		if _, ok := p.cfg.Queue.Next(); !ok {
-			return p.stop(rctx)
+			err := p.stop(rctx)
+			p.st.EndOfQueue = true // next on the last track: autoplay may go on
+			return err
 		}
 		p.loadCurrent()
 		return nil
@@ -297,7 +304,7 @@ func (p *Player) QueueChanged(ctx context.Context) error {
 func (p *Player) stop(ctx context.Context) error {
 	p.gen++
 	p.preloaded, p.preloading = 0, false
-	p.st.State, p.st.Position = Stopped, 0
+	p.st.State, p.st.Position, p.st.EndOfQueue = Stopped, 0, false
 	if p.engine == nil {
 		return nil
 	}
@@ -318,6 +325,7 @@ func (p *Player) load(h queue.Handle, t Track, start time.Duration) {
 	p.current = h
 	p.preloaded, p.preloading = 0, false
 	p.st.State, p.st.Track, p.st.Position, p.st.Message = Loading, &t, start, ""
+	p.st.EndOfQueue = false
 	p.st.Duration = t.Duration
 	go p.resolve(loadResult{gen: gen, handle: h, track: t, start: start})
 }
@@ -412,7 +420,8 @@ func (p *Player) skip(ctx context.Context, r loadResult) {
 	}
 	if _, ok := p.cfg.Queue.Next(); !ok {
 		p.skipped = 0
-		p.halt(ctx) // the end of the queue
+		p.halt(ctx)
+		p.st.EndOfQueue = true
 		return
 	}
 	p.loadCurrent()
@@ -509,7 +518,7 @@ func (p *Player) onEnded(ctx context.Context, h queue.Handle, ev Event) {
 	// EOF: advance the queue.
 	if _, ok := p.cfg.Queue.Advance(); !ok {
 		p.logger.Info("end of queue")
-		p.st.State, p.st.Position = Stopped, 0
+		p.st.State, p.st.Position, p.st.EndOfQueue = Stopped, 0, true
 		return
 	}
 	s := p.cfg.Queue.Snapshot()

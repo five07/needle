@@ -71,6 +71,9 @@ func (v *QueueView) relayout() {
 		t := it.Track
 		row := rowText(entry{kind: entryTrack, track: tidal.Track{Title: t.Title, Artists: []string{t.Artists}, Album: t.Album, Duration: t.Duration}},
 			max(v.width, 1), false)
+		if t.Autoplay {
+			row = autoplayMark + strings.TrimPrefix(row, indent)
+		}
 		if i == 0 && np.Current != nil && np.Current.Handle == it.Handle {
 			mark := "▶ "
 			if np.State == Paused {
@@ -184,11 +187,38 @@ func (v *QueueView) Bindings() []key.Binding {
 	if len(v.items) == 0 {
 		return nil
 	}
-	return []key.Binding{
+	b := []key.Binding{
 		key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "play / pause")),
 		queueRemove, queueClear,
 	}
+	if v.hasAutoplay() {
+		// A legend, not a key: it never matches. It leads the hint line,
+		// which would otherwise cut it at 80 columns.
+		b = append([]key.Binding{key.NewBinding(key.WithHelp("∞", "autoplay"))}, b...)
+	}
+	return b
 }
+
+// LeadHints implements HintLeader: the autoplay legend comes first.
+func (v *QueueView) LeadHints() int {
+	if v.hasAutoplay() {
+		return 1
+	}
+	return 0
+}
+
+func (v *QueueView) hasAutoplay() bool {
+	for _, it := range v.items {
+		if it.Track.Autoplay {
+			return true
+		}
+	}
+	return false
+}
+
+// autoplayMark starts the row of an autoplayed track (decision 64). It is
+// plain text, like the favorite mark, so the selected row's style holds.
+const autoplayMark = "∞ "
 
 // Capturing implements View.
 func (v *QueueView) Capturing() bool { return false }

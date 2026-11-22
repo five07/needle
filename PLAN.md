@@ -364,6 +364,34 @@ The scope was simplified: login stays in the terminal before the TUI starts (it 
     - b) Keep it; only the login is removed.
     > MS: a
 
+### TASK-017 (autoplay radio)
+
+62. **The autoplay setting.** AC #3 turns it off while playing, so it has to change at runtime, not only in `config.toml`.
+    - a) **(Recommended)** A key toggles it: `c` ("continue"; `a` is add to queue). The bar's controls row shows it next to shuffle and repeat, for example `∞ off` / `∞ on`, and a click toggles it there too. It is remembered across restarts with the saved queue (decision 59) and starts off. MPRIS has no autoplay property, so desktop widgets do not show it.
+    - b) As (a), plus an `autoplay = true|false` setting in `config.toml` for the value at startup.
+    - c) `config.toml` only, read at startup (AC #3 would then mean restarting).
+    > MS: b, and a editable config in Account (which is to be added to TASK-027)
+
+63. **What autoplay adds, and when.** TIDAL's track radio is a mix playlist of related tracks.
+    - a) **(Recommended)** When the last track in the queue starts (repeat off), needle fetches the radio for that track in the background and appends its first page (about 20 tracks) as autoplayed entries, leaving out tracks already in the queue. The next track is then ready for gapless playback. When those run out, the same happens again from the then-last track, so the radio drifts. If TIDAL has no radio for the track, or the request fails, playback stops at the end as today, with a notice.
+    - b) As (a), but fetched only once the last track ends (a short gap, no gapless).
+    > MS: a
+
+64. **Marking autoplayed tracks in the Queue view** (AC #2).
+    - a) **(Recommended)** A dim `∞` before the title of each autoplayed row, and the Queue view's hint line says `∞ autoplay`. Rows keep their columns.
+    - b) One divider row above the first autoplayed track: `Autoplay: radio from "<title>"`. Needs the list to support a non-selectable row again (removed in TASK-025).
+    > MS: a
+
+65. **Turning autoplay off mid-radio** (AC #3).
+    - a) **(Recommended)** The upcoming autoplayed tracks are removed from the queue; tracks you queued yourself stay. The current track finishes, then playback stops (or goes on to your own tracks).
+    - b) The autoplayed tracks stay queued, and nothing more is fetched; playback continues through them.
+    > MS: a
+
+66. **Repeat, skipping, and the saved queue.**
+    - a) **(Recommended)** Autoplay only acts with repeat off (repeat all and one never reach the end). Pressing next on the last track also continues with radio. Adding your own tracks while autoplayed ones are upcoming puts yours before them (`a` inserts ahead of the autoplayed entries), so radio never pushes your choices back. The autoplay mark is saved with each entry in `queue.json`.
+    - b) As (a), but `a` appends after the autoplayed tracks, as a plain append.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -464,6 +492,11 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 59 | Restored queue | History, current, upcoming, shuffle (with its order), and repeat come back, stopped at the start of the current track. The app opens on the Queue view with the current track selected; space or the play button starts it. |
 | 60 | Queue saving | After every change, atomically, to a `0600` file, only when something changed; position updates never write. |
 | 61 | Logout and the queue | `-logout` deletes the saved queue, like the best quality. |
+| 62 | Autoplay setting | `autoplay = false` in `config.toml` sets it at startup; `c` and a click on the bar's `∞` toggle it for the session (not remembered). The Account view shows it read-only; editing it there belongs to TASK-027. |
+| 63 | Autoplay source | When the last track starts (repeat off), fetch its track radio and append the first page as autoplayed entries, leaving out tracks already queued; repeat from the new last track. No radio or a failed request: stop at the end with a notice. |
+| 64 | Autoplay mark | A dim `∞` before the title of each autoplayed Queue row, with `∞ autoplay` in the hint line. |
+| 65 | Autoplay off | Upcoming autoplayed entries are removed; your own stay; the current track finishes. |
+| 66 | Autoplay rules | Only with repeat off; next on the last track continues too; `a` inserts ahead of upcoming autoplayed entries; the mark is saved in `queue.json`. |
 
 ## Definition of Done
 

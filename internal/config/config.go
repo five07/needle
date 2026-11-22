@@ -56,8 +56,11 @@ const DefaultAudioDevice = "auto"
 // Config is the validated application configuration.
 type Config struct {
 	Quality Quality `toml:"quality"`
-	Audio   Audio   `toml:"audio"`
-	Auth    Auth    `toml:"auth"`
+	// Autoplay continues with track radio when the queue ends (decision
+	// 62). It is the value at startup; the UI can toggle it.
+	Autoplay bool  `toml:"autoplay"`
+	Audio    Audio `toml:"audio"`
+	Auth     Auth  `toml:"auth"`
 }
 
 // Audio holds output settings.

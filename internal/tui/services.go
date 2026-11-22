@@ -63,6 +63,9 @@ type Transport interface {
 	Previous(ctx context.Context) error
 	SetShuffle(ctx context.Context, on bool) error
 	CycleRepeat(ctx context.Context) error
+	// SetAutoplay turns autoplay on or off; off removes the upcoming
+	// autoplayed tracks (decision 65).
+	SetAutoplay(ctx context.Context, on bool) error
 	// Jump plays the queued entry h.
 	Jump(ctx context.Context, h uint64) error
 	// Remove deletes the upcoming entry h.

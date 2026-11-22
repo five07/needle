@@ -16,7 +16,9 @@ ordinal: 20000
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-PLAN.md New Items 3: an optional audio visualizer the user can turn on and off. It must not alter the audio path, so the bit-perfect indicator is unaffected.
+PLAN.md New Items 3: an optional audio visualizer the user can turn on and off. It must not alter the audio path, so the bit-perfect indicator is unaffected. It should be a background for the now playing view. The theme should be selectable in a new "Settings" side bar controller. Ask me about this, all of our current and future non-TIDAL settings should move here. THis will get updated in TASK-027 and created there.
+The themes are "terminal" (based on the current terminal color settings), "burnt orange", "ice blue", "forest green", "royal purple", "deep red" and "custom" (only editable in the config file)
+Regardless of theme, a gradient will be used, darker at the bottom and bighter at the top, perhaps in 4 steps.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria

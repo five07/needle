@@ -284,6 +284,8 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 		return m.transport(actShuffle)
 	case key.Matches(k, Keys.Repeat):
 		return m.transport(actRepeat)
+	case key.Matches(k, Keys.Autoplay):
+		return m.transport(actAutoplay)
 	}
 	if m.focus == paneSidebar {
 		switch {

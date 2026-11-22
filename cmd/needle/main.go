@@ -243,13 +243,15 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	notices := make(chan string, 4)
 	status := make(chan tui.NowPlaying, 1)
 	pb := &playback{q: q, p: p, changed: make(chan struct{}, 1)}
+	pb.autoplay.Store(cfg.Autoplay)
 	var best *bestQuality
 	if stateDir != "" {
 		best = loadBestQuality(filepath.Join(stateDir, BestQualityFile), logger)
 	} else {
 		best = &bestQuality{logger: logger} // not remembered
 	}
-	w := watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best, saved: saved}
+	w := watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best, saved: saved,
+		auto: newAutoplay(catalog, pb, logger)}
 	mp, stopMPRIS := startMPRIS(d.sessionBus, pb, logger)
 	if mp != nil {
 		w.mpris = mp // only when registered: a nil *Service in the interface would not be nil
@@ -260,7 +262,8 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 		pb.edited() // the bar and Queue view show the restored queue at once
 	}
 	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified,
-		Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device}
+		Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device,
+		Autoplay: cfg.Autoplay}
 
 	svc := &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
 		Playback: pb, Transport: pb, Logger: logger}

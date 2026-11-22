@@ -27,6 +27,7 @@ type stubTransport struct {
 	plays, changes, pauses, nexts, prevs, stops int
 	setPaused                                   []bool
 	state                                       player.PlayState
+	end                                         bool // Status().EndOfQueue
 	err                                         error
 }
 
@@ -35,7 +36,9 @@ func (s *stubTransport) SetPaused(_ context.Context, p bool) error {
 	return s.err
 }
 func (s *stubTransport) Stop(context.Context) error { s.stops++; return s.err }
-func (s *stubTransport) Status() player.Status      { return player.Status{State: s.state} }
+func (s *stubTransport) Status() player.Status {
+	return player.Status{State: s.state, EndOfQueue: s.end}
+}
 
 func (s *stubTransport) Play(context.Context) error         { s.plays++; return s.err }
 func (s *stubTransport) QueueChanged(context.Context) error { s.changes++; return s.err }
@@ -137,8 +140,10 @@ func (s *stubStatus) Updates() <-chan struct{} { return s.updates }
 func (s *stubStatus) Status() player.Status {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	msg := s.pending[0]
-	s.pending = s.pending[1:]
+	msg := "" // a read with no update queued (after a radio result)
+	if len(s.pending) > 0 {
+		msg, s.pending = s.pending[0], s.pending[1:]
+	}
 	st := player.Status{}
 	if s.status != nil {
 		st = *s.status

@@ -52,6 +52,8 @@ type QueueTrack struct {
 	Artists  string
 	Album    string
 	Duration time.Duration
+	// Autoplay marks a track that autoplay added (decision 64).
+	Autoplay bool
 }
 
 // QueueItem is one queue entry. Handle identifies it for Jump and Remove.
@@ -80,6 +82,8 @@ type NowPlaying struct {
 	Preview bool
 	Shuffle bool
 	Repeat  RepeatMode
+	// Autoplay is on: the queue continues with radio when it ends.
+	Autoplay bool
 	// Best is the highest quality TIDAL has delivered, for example
 	// "FLAC 24/192", and BestSeen when it first arrived (TASK-014).
 	Best     string
@@ -165,6 +169,7 @@ const (
 	actPlayPause
 	actNext
 	actRepeat
+	actAutoplay
 )
 
 // barZone is the cells [x0, x1) of the controls row a control occupies,
@@ -351,6 +356,10 @@ func controlsLine(np NowPlaying, w int) (string, []barZone) {
 		shuffle = "⇄ on"
 	}
 	repeat := [...]string{RepeatOff: "↻ off", RepeatAll: "↻ all", RepeatOne: "↻ one"}[min(max(np.Repeat, 0), RepeatOne)]
+	autoplay := "∞ off"
+	if np.Autoplay {
+		autoplay = "∞ on"
+	}
 	play := "[▶]"
 	if np.State == Playing || np.State == Loading {
 		play = "[⏸]"
@@ -364,7 +373,8 @@ func controlsLine(np NowPlaying, w int) (string, []barZone) {
 		{"[⏮]", actPrevious, "  "},
 		{play, actPlayPause, "  "},
 		{"[⏭]", actNext, "    "},
-		{repeat, actRepeat, ""},
+		{repeat, actRepeat, "    "},
+		{autoplay, actAutoplay, ""},
 	}
 	total := 0
 	for _, p := range parts {
@@ -381,7 +391,7 @@ func controlsLine(np NowPlaying, w int) (string, []barZone) {
 		pw := ansi.StringWidth(p.text)
 		zones = append(zones, barZone{x, x + pw, p.act})
 		text := p.text
-		if (p.act == actShuffle && np.Shuffle) || (p.act == actRepeat && np.Repeat != RepeatOff) {
+		if (p.act == actShuffle && np.Shuffle) || (p.act == actRepeat && np.Repeat != RepeatOff) || (p.act == actAutoplay && np.Autoplay) {
 			text = styleNotice.Render(text)
 		}
 		b.WriteString(text + p.gap)
@@ -421,6 +431,9 @@ func (m *Model) transport(act barAction) tea.Cmd {
 		f = func(ctx context.Context) error { return t.SetShuffle(ctx, on) }
 	case actRepeat:
 		f = t.CycleRepeat
+	case actAutoplay:
+		on := !m.svc.playing.Autoplay
+		f = func(ctx context.Context) error { return t.SetAutoplay(ctx, on) }
 	}
 	return m.svc.transportCmd(f)
 }

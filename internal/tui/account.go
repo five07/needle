@@ -18,6 +18,9 @@ type AccountInfo struct {
 	Quality     string
 	AudioMode   string
 	AudioDevice string
+	// Autoplay is the autoplay setting at startup (decision 62); c
+	// toggles it for the session.
+	Autoplay bool
 }
 
 // AccountView is the Account section: who is logged in, the best quality
@@ -62,10 +65,11 @@ func (v *AccountView) Render(width, height int, _ bool) string {
 		row("Highest quality", best),
 		styleDim.Render(fit("  TIDAL does not share your plan; this is the best received.", width)),
 		"",
-		styleHeading.Render(fit("Audio settings", width)),
+		styleHeading.Render(fit("Settings", width)),
 		row("Quality", orDash(v.info.Quality)),
 		row("Mode", orDash(v.info.AudioMode)),
 		row("Device", orDash(v.info.AudioDevice)),
+		row("Autoplay", map[bool]string{false: "off", true: "on"}[v.info.Autoplay]+" at start"),
 		styleDim.Render(fit("  Change these in config.toml and restart.", width)),
 	}
 	return strings.Join(lines[:min(len(lines), max(height, 0))], "\n")

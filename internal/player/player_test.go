@@ -959,3 +959,43 @@ func TestUserActionResetsTheSkipCount(t *testing.T) {
 		})
 	}
 }
+
+// EndOfQueue tells autoplay that playback ran out, not that it was stopped.
+func TestEndOfQueue(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a")
+	h.p.Play(ctx())
+	e := h.engine()
+	h.send(e, Event{Kind: EventStarted, Key: uint64(h.handle(0))})
+	h.send(e, Event{Kind: EventEnded, Key: uint64(h.handle(0)), Reason: EndEOF})
+	if st := h.waitStatus(func(s Status) bool { return s.State == Stopped }); !st.EndOfQueue {
+		t.Error("ran out: EndOfQueue not set")
+	}
+	h.p.Stop(ctx())
+	if h.p.Status().EndOfQueue {
+		t.Error("stop after running out kept EndOfQueue")
+	}
+	h.p.Next(ctx()) // ran out again
+	h.p.Play(ctx())
+	if h.p.Status().EndOfQueue {
+		t.Error("a new load kept EndOfQueue")
+	}
+	h.p.Stop(ctx())
+	if h.p.Status().EndOfQueue {
+		t.Error("stop set EndOfQueue")
+	}
+	// Next on the last track ends the queue too.
+	h.p.Play(ctx())
+	h.p.Next(ctx())
+	if st := h.p.Status(); st.State != Stopped || !st.EndOfQueue {
+		t.Errorf("next on the last track: %+v", st)
+	}
+	// So does skipping an unavailable last track.
+	s := newHarness(t, config.AudioShared, "a", "x")
+	s.res.errs["x"] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	s.q.Next()
+	s.p.Play(ctx())
+	s.waitLoads(1)
+	if !s.p.Status().EndOfQueue {
+		t.Error("skip at the end: EndOfQueue not set")
+	}
+}

@@ -153,6 +153,54 @@ func (q *Queue[T]) Add(item T) Handle {
 	return h
 }
 
+// AddBefore inserts item ahead of the first upcoming entry for which before
+// returns true, in both the play order and the original order, or appends
+// it when there is none (autoplayed entries, decision 66). On an empty
+// queue it becomes the current entry.
+func (q *Queue[T]) AddBefore(item T, before func(T) bool) Handle {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.rev++
+	h := q.newEntry(item)
+	if q.cur < 0 {
+		q.orig, q.play, q.cur = []Handle{h}, []Handle{h}, 0
+		return h
+	}
+	for i := q.cur + 1; i < len(q.play); i++ {
+		if at := q.play[i]; before(q.items[at]) {
+			q.play = slices.Insert(q.play, i, h)
+			q.orig = slices.Insert(q.orig, slices.Index(q.orig, at), h)
+			return h
+		}
+	}
+	q.orig = append(q.orig, h)
+	q.play = append(q.play, h)
+	return h
+}
+
+// RemoveUpcoming deletes every upcoming entry for which drop returns true
+// and returns how many it removed.
+func (q *Queue[T]) RemoveUpcoming(drop func(T) bool) int {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	if q.cur < 0 {
+		return 0
+	}
+	n := 0
+	for _, h := range slices.Clone(q.play[q.cur+1:]) {
+		if drop(q.items[h]) {
+			q.play = slices.DeleteFunc(q.play, func(x Handle) bool { return x == h })
+			q.orig = slices.DeleteFunc(q.orig, func(x Handle) bool { return x == h })
+			delete(q.items, h)
+			n++
+		}
+	}
+	if n > 0 {
+		q.rev++
+	}
+	return n
+}
+
 // Remove deletes an upcoming entry. It returns false if h is not upcoming
 // (the current entry and history cannot be removed).
 func (q *Queue[T]) Remove(h Handle) bool {

@@ -88,7 +88,7 @@ func TestBarLines(t *testing.T) {
 		"Daft Punk · Discovery",
 		"FLAC 24/96 → out 24/96 · exclusive · ✓ bit-perfect",
 		"1:42 ━━━━━━━━━━━━━━━━━━●───────────────────────────────────────── 5:20",
-		"⇄ on    [⏮]  [⏸]  [⏭]    ↻ all",
+		"⇄ on    [⏮]  [⏸]  [⏭]    ↻ all    ∞ off",
 	}
 	for i := range want {
 		if got[i] != want[i] {
@@ -178,14 +178,14 @@ func TestControlsLine(t *testing.T) {
 		np   NowPlaying
 		want string
 	}{
-		{NowPlaying{State: Paused}, "⇄ off    [⏮]  [▶]  [⏭]    ↻ off"},
-		{NowPlaying{State: Loading, Shuffle: true, Repeat: RepeatOne}, "⇄ on    [⏮]  [⏸]  [⏭]    ↻ one"},
-		{NowPlaying{State: Stopped, Repeat: 7}, "⇄ off    [⏮]  [▶]  [⏭]    ↻ one"},
+		{NowPlaying{State: Paused}, "⇄ off    [⏮]  [▶]  [⏭]    ↻ off    ∞ off"},
+		{NowPlaying{State: Loading, Shuffle: true, Repeat: RepeatOne}, "⇄ on    [⏮]  [⏸]  [⏭]    ↻ one    ∞ off"},
+		{NowPlaying{State: Stopped, Repeat: 7, Autoplay: true}, "⇄ off    [⏮]  [▶]  [⏭]    ↻ one    ∞ on"},
 	}
 	for _, tt := range tests {
 		line, zones := controlsLine(tt.np, 60)
 		plain := ansi.Strip(line)
-		if strings.TrimSpace(plain) != tt.want || ansi.StringWidth(line) != 60 || len(zones) != 5 {
+		if strings.TrimSpace(plain) != tt.want || ansi.StringWidth(line) != 60 || len(zones) != 6 {
 			t.Errorf("got %q (%d zones)", plain, len(zones))
 		}
 		// Each zone covers its control's text.
@@ -194,6 +194,10 @@ func TestControlsLine(t *testing.T) {
 				t.Errorf("zone %+v covers %q", z, s)
 			}
 		}
+	}
+	// On, autoplay is highlighted like shuffle and repeat.
+	if on, _ := controlsLine(NowPlaying{Autoplay: true}, 60); !strings.Contains(on, styleNotice.Render("∞ on")) {
+		t.Errorf("autoplay on not highlighted: %q", on)
 	}
 	if line, zones := controlsLine(NowPlaying{}, 20); zones != nil || ansi.StringWidth(line) != 20 {
 		t.Error("controls on a narrow bar")
@@ -314,6 +318,9 @@ func (s *stubTransport) SetShuffle(_ context.Context, on bool) error {
 	return s.rec(fmt.Sprint("shuffle ", on))
 }
 func (s *stubTransport) CycleRepeat(context.Context) error { return s.rec("repeat") }
+func (s *stubTransport) SetAutoplay(_ context.Context, on bool) error {
+	return s.rec(fmt.Sprint("autoplay ", on))
+}
 func (s *stubTransport) Jump(_ context.Context, h uint64) error {
 	return s.rec(fmt.Sprint("jump ", h))
 }
@@ -342,6 +349,8 @@ func TestTransportKeys(t *testing.T) {
 		{[]tea.Msg{press("p"), press("[")}, []string{"prev", "prev"}},
 		{[]tea.Msg{press("s")}, []string{"shuffle false"}}, // the fixture has shuffle on
 		{[]tea.Msg{press("r")}, []string{"repeat"}},
+		{[]tea.Msg{press("c")}, []string{"autoplay true"}},
+		{[]tea.Msg{NowPlayingMsg{func() NowPlaying { np := playingNow(); np.Autoplay = true; return np }()}, press("c")}, []string{"autoplay false"}},
 		{[]tea.Msg{press("l"), press("s")}, []string{"shuffle false"}}, // from the main pane too
 	}
 	for _, tt := range tests {
@@ -381,7 +390,7 @@ func TestBarClicks(t *testing.T) {
 	_, m, tr := transportEnv(t)
 	bar := m.layout.Bar
 	_, zones := controlsLine(m.svc.playing, bar.W)
-	want := []string{"shuffle false", "prev", "pause", "next", "repeat"}
+	want := []string{"shuffle false", "prev", "pause", "next", "repeat", "autoplay true"}
 	for i, z := range zones {
 		m.last = click{} // no double-clicks
 		drive(m, tea.MouseClickMsg{X: bar.X + z.x0, Y: bar.Y + barControls, Button: tea.MouseLeft})

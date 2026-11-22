@@ -37,7 +37,9 @@ func bufLogger() (*slog.Logger, *bytes.Buffer) {
 func TestSavedQueueRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), QueueFile)
 	q := newTestQueue()
-	q.Set([]player.Track{track("1"), track("2"), track("3"), track("4")}, 0)
+	auto := track("4")
+	auto.Autoplay = true
+	q.Set([]player.Track{track("1"), track("2"), track("3"), auto}, 0)
 	q.Next()
 	q.SetShuffle(true)
 	q.SetRepeat(queue.RepeatOne)
@@ -356,9 +358,11 @@ func TestNewUIRestoresQueue(t *testing.T) {
 	os.WriteFile(filepath.Join(stateDir, QueueFile), []byte(`{"version":1,"tracks":[
 		{"id":"1","title":"First Song","artists":"Someone","duration_ms":200000},
 		{"id":"2","title":"Second Song","artists":"Someone","duration_ms":185000},
-		{"id":"3","title":"Third Song","artists":"Someone","duration_ms":100000}],
+		{"id":"3","title":"Third Song","artists":"Someone","duration_ms":100000,"autoplay":true}],
 		"play":[0,1,2],"current":1,"repeat":"all"}`), 0o600)
-	model, stop, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "US"}, "", stateDir, discardLogger())
+	cfg := testConfig()
+	cfg.Autoplay = true
+	model, stop, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, "", stateDir, discardLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -368,7 +372,7 @@ func TestNewUIRestoresQueue(t *testing.T) {
 		model.Update(msg)
 	}
 	s := screen(model)
-	for _, want := range []string{"▸ Queue (1)", "▶ Second Song", "Third Song", "Stopped", "↻ all"} {
+	for _, want := range []string{"▸ Queue (1)", "▶ Second Song", "∞ Third Song", "Stopped", "↻ all", "∞ on"} {
 		if !strings.Contains(s, want) {
 			t.Errorf("screen lacks %q:\n%s", want, s)
 		}

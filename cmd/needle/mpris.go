@@ -48,7 +48,7 @@ func mprisState(np tui.NowPlaying, volume float64) mpris.State {
 		Shuffle:  np.Shuffle,
 		Loop:     [...]mpris.Loop{tui.RepeatOff: mpris.LoopNone, tui.RepeatAll: mpris.LoopPlaylist, tui.RepeatOne: mpris.LoopTrack}[np.Repeat],
 		Volume:   min(max(volume/100, 0), 1),
-		CanNext:  len(np.Upcoming) > 0 || (np.Current != nil && np.Repeat != tui.RepeatOff),
+		CanNext:  len(np.Upcoming) > 0 || (np.Current != nil && (np.Repeat != tui.RepeatOff || np.Autoplay)),
 		CanPrev:  np.Current != nil, // previous restarts the first track
 	}
 	switch np.State {

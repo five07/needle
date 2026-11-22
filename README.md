@@ -87,6 +87,7 @@ Sections that are not built yet say so in the main pane. Playing and queueing ar
 | `p` / `[` | Previous track (on the first track: start it over) |
 | `s` | Shuffle on / off |
 | `r` | Repeat: off, all, one |
+| `c` | Autoplay radio: on, off |
 
 While the search input has focus, letters and `space` type into it, so `q`, `j`, `space`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
 
@@ -127,9 +128,9 @@ The bar at the bottom shows, centered, top to bottom:
 2. The artists and the album.
 3. The format: what TIDAL sent, what reaches the sound card, the audio mode, and the bit-perfect indicator, for example `FLAC 24/96 → out 24/96 · exclusive · ✓ bit-perfect`. When the output differs from the source, the indicator turns yellow and says why, for example `⚠ resampled to 48 kHz (source 96 kHz)`. Previews are marked `PREVIEW`.
 4. Elapsed time, a progress bar, and the track length. The progress bar is display only.
-5. The controls: shuffle (`⇄ on`/`off`), previous, play/pause, next, and repeat (`↻ off`/`all`/`one`). Click any of them.
+5. The controls: shuffle (`⇄ on`/`off`), previous, play/pause, next, repeat (`↻ off`/`all`/`one`), and autoplay (`∞ on`/`off`). Click any of them.
 
-When the queue runs out, the bar keeps the last track and says "Stopped".
+When the queue runs out, the bar keeps the last track and says "Stopped", unless autoplay continues it.
 
 ### Queue
 
@@ -141,9 +142,17 @@ The Queue section lists the track that is playing, then the tracks still to come
 
 The queue is kept across restarts in `$XDG_STATE_HOME/needle/queue.json` (mode `0600`): the tracks already played, the current track, the ones still to come (in their shuffled order, if shuffle is on), and the shuffle and repeat settings. It is saved after every change to it, not while a track plays, so it survives a crash too; the position within a track is not kept. When there is a saved queue, needle opens on the Queue view with the current track selected and waits: press `space`, `enter`, or the play button to start it. A damaged saved queue, or one over 10,000 tracks, is ignored (and logged), and a queue longer than that is not saved.
 
+**Autoplay** continues with related music when the queue runs out. Turn it on with `c`, a click on `∞` in the bar, or `autoplay = true` in `config.toml` (the value at startup; `c` changes it for the session only). With autoplay on and repeat off, when the last track starts needle fetches TIDAL's track radio for it and adds its first page (about 20 tracks) to the end of the queue, leaving out tracks already queued, so the next track plays gaplessly. When those run out, it does the same from the new last track, so the music drifts. Pressing next on the last track continues too.
+
+- Autoplayed tracks start with `∞` in the Queue view, and the hint line shows `∞ autoplay`.
+- Tracks you add with `a` go ahead of the autoplayed ones; `A` (play next) still puts them right after the current track.
+- Turning autoplay off removes the upcoming autoplayed tracks and keeps yours. The current track finishes.
+- If TIDAL has no radio for the track, or the request fails, playback stops at the end with a notice, and needle does not try again for that track until you turn autoplay off and on.
+- Autoplayed tracks are kept with the saved queue. Desktop widgets (MPRIS) can skip to the next track when autoplay is on, but cannot turn it on or off.
+
 ### Account
 
-The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/needle/best_quality.json`. Below that are your `quality`, audio mode, and audio device settings, read-only; change them in `config.toml` and restart.
+The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/needle/best_quality.json`. Below that are your `quality`, audio mode, audio device, and autoplay settings, read-only; change them in `config.toml` and restart. The autoplay line is the value at startup; `c` changes it for the session.
 
 ### Mouse
 
@@ -233,6 +242,8 @@ needle reads `$XDG_CONFIG_HOME/needle/config.toml` (default `~/.config/needle/co
 ```toml
 # Stream quality: "aac", "lossless", or "hires".
 quality = "hires"
+# Continue with track radio when the queue runs out (toggle with c).
+autoplay = false
 
 [audio]
 # "shared" plays through PipeWire. "exclusive" opens the device directly

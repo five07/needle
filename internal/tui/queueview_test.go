@@ -168,3 +168,30 @@ func TestOpenQueue(t *testing.T) {
 		t.Errorf("default section %d focus %d", d.section, d.focus)
 	}
 }
+
+// Autoplayed rows start with ∞, and the hint line explains it (decision 64).
+func TestQueueAutoplayMark(t *testing.T) {
+	_, m, _ := transportEnv(t)
+	np := playingNow()
+	np.Autoplay, np.Repeat = true, RepeatOff
+	np.Upcoming = append(np.Upcoming,
+		QueueItem{Handle: 4, Track: QueueTrack{ID: "4", Title: "Harder, Better, Faster, Stronger", Artists: "Daft Punk", Album: "Discovery", Duration: 224 * time.Second, Autoplay: true}},
+		QueueItem{Handle: 5, Track: QueueTrack{ID: "5", Title: "Around the World", Artists: "Daft Punk", Album: "Homework", Duration: 429 * time.Second, Autoplay: true}})
+	drive(m, NowPlayingMsg{np}, press("4"), press("l"))
+	golden(t, "queue_autoplay_80x24", m.render())
+	s := ansi.Strip(m.render())
+	if strings.Count(s, "∞ Harder") != 1 || strings.Count(s, "∞ Around") != 1 || strings.Contains(s, "∞ Aerodynamic") || !strings.Contains(s, "∞ autoplay") {
+		t.Errorf("marks or legend wrong:\n%s", s)
+	}
+	// No autoplayed rows: no legend.
+	drive(m, NowPlayingMsg{playingNow()})
+	if strings.Contains(ansi.Strip(m.render()), "∞ autoplay") {
+		t.Error("legend without autoplayed rows")
+	}
+	// The legend is not a key.
+	for _, b := range queueView(m).Bindings() {
+		if b.Help().Key == "∞" && len(b.Keys()) != 0 {
+			t.Error("the legend has keys")
+		}
+	}
+}

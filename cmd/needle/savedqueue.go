@@ -43,6 +43,7 @@ type savedTrack struct {
 	Artists    string `json:"artists,omitempty"`
 	Album      string `json:"album,omitempty"`
 	DurationMS int64  `json:"duration_ms,omitempty"`
+	Autoplay   bool   `json:"autoplay,omitempty"`
 }
 
 // savedQueue writes the queue to its file whenever it changes. It is used
@@ -111,7 +112,7 @@ func readSavedQueue(path string) (queue.State[player.Track], error) {
 			return st, errors.New("saved queue: file is damaged")
 		}
 		st.Items = append(st.Items, player.Track{ID: t.ID, Title: t.Title, Artists: t.Artists, Album: t.Album,
-			Duration: time.Duration(t.DurationMS) * time.Millisecond})
+			Duration: time.Duration(t.DurationMS) * time.Millisecond, Autoplay: t.Autoplay})
 	}
 	st.Play, st.Current, st.Shuffle, st.Repeat = j.Play, j.Current, j.Shuffle, repeat
 	return st, nil // Restore checks Play and Current
@@ -168,7 +169,8 @@ func (s *savedQueue) write(st queue.State[player.Track]) error {
 	j := savedQueueJSON{Version: savedVersion, Play: st.Play, Current: st.Current, Shuffle: st.Shuffle,
 		Repeat: st.Repeat.String(), Tracks: make([]savedTrack, len(st.Items))}
 	for i, t := range st.Items {
-		j.Tracks[i] = savedTrack{ID: t.ID, Title: t.Title, Artists: t.Artists, Album: t.Album, DurationMS: t.Duration.Milliseconds()}
+		j.Tracks[i] = savedTrack{ID: t.ID, Title: t.Title, Artists: t.Artists, Album: t.Album, DurationMS: t.Duration.Milliseconds(),
+			Autoplay: t.Autoplay}
 	}
 	data, err := json.Marshal(j)
 	if err != nil {

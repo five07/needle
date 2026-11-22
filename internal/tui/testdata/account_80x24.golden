@@ -6,12 +6,12 @@
 │ ▸ Account     │   Highest quality  FLAC 24/192 (first seen 2026-11-22)       │
 │               │   TIDAL does not share your plan; this is the best received. │
 │               │                                                              │
-│               │ Audio settings                                               │
+│               │ Settings                                                     │
 │               │   Quality          hires                                     │
 │               │   Mode             exclusive                                 │
 │               │   Device           alsa/hw:CARD=DAC,DEV=0                    │
+│               │   Autoplay         on at start                               │
 │               │   Change these in config.toml and restart.                   │
-│               │                                                              │
 ├───────────────┴──────────────────────────────────────────────────────────────┤
 │                                                                              │
 │                                                                              │
