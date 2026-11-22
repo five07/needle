@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. The project scaffold is in place; the UI and player are not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, and the play queue are in place; the UI and player are not built yet. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -32,6 +32,22 @@ go build -ldflags "-X main.version=v0.1.0 -X github.com/five07/tidal-tui/interna
 ```
 
 The client ID is not stored in the source. Without a build-time ID, set `TIDAL_CLIENT_ID` in the environment or `auth.client_id` in the config file.
+
+## Login
+
+On the first launch tidal-tui prints a TIDAL login URL and opens it in your browser (via `xdg-open`). After you approve access, TIDAL redirects to `http://127.0.0.1:8765/callback`, where tidal-tui listens on the loopback interface only, for one callback, for up to five minutes. The login uses OAuth 2 with PKCE, so no client secret is needed. Port 8765 must be free during login, because it is the redirect URI registered for the app.
+
+Tokens are kept in the system keyring through the Secret Service API (GNOME Keyring, KWallet, KeePassXC). When no keyring is reachable, tidal-tui stores them in `$XDG_CONFIG_HOME/tidal-tui/credentials.json` with mode `0600` instead, logs a warning, and refuses to read that file if other users can access it. Only one account is stored; logging in again replaces it.
+
+Access tokens refresh automatically. If TIDAL revokes the session, tidal-tui asks you to log in again.
+
+To log out and remove stored credentials from both the keyring and the file:
+
+```sh
+./tidal-tui -logout
+```
+
+Until the terminal UI is built, launching tidal-tui logs in if needed, prints the account name, and exits.
 
 ## Configuration
 

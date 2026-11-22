@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,14 +59,16 @@ func TestRun(t *testing.T) {
 			wantNoLog:  true,
 		},
 		{
-			name:       "no args loads defaults and logs startup",
-			wantStderr: "not implemented yet",
+			name:       "no args loads defaults, logs startup, and needs a client ID",
+			wantCode:   1,
+			wantStderr: "no TIDAL client ID: set auth.client_id in",
 			wantLog:    []string{"msg=starting", "quality=hires", "audio_mode=shared", "audio_device=auto", "client_id_set=false"},
 		},
 		{
 			name:       "config file and env are applied",
 			env:        map[string]string{"TIDAL_CLIENT_ID": "envid"},
 			config:     "quality = \"lossless\"\n[audio]\nmode = \"exclusive\"\n",
+			wantStdout: "Logged in as listener (US).\n",
 			wantStderr: "not implemented yet",
 			wantLog:    []string{"quality=lossless", "audio_mode=exclusive", "client_id_set=true"},
 		},
@@ -123,7 +126,7 @@ func TestRun(t *testing.T) {
 			}
 			var stdout, stderr bytes.Buffer
 
-			code := run(tt.args, getenv, &stdout, &stderr)
+			code := run(context.Background(), newFakeTIDAL(t).deps(), tt.args, getenv, &stdout, &stderr)
 
 			if code != tt.wantCode {
 				t.Errorf("exit code = %d, want %d (stderr: %q)", code, tt.wantCode, stderr.String())
@@ -164,10 +167,34 @@ func TestRunLogOpenFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 	var stdout, stderr bytes.Buffer
-	if code := run(nil, getenv, &stdout, &stderr); code != 1 {
+	if code := run(context.Background(), newFakeTIDAL(t).deps(), nil, getenv, &stdout, &stderr); code != 1 {
 		t.Errorf("exit code = %d, want 1", code)
 	}
 	if !strings.Contains(stderr.String(), "logging:") {
 		t.Errorf("stderr = %q, want a logging error", stderr.String())
+	}
+}
+
+func TestMainExitCode(t *testing.T) {
+	oldArgs, oldExit, oldStdout := os.Args, exit, os.Stdout
+	t.Cleanup(func() { os.Args, exit, os.Stdout = oldArgs, oldExit, oldStdout })
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer devNull.Close()
+	os.Stdout = devNull // keep the version line out of test output
+
+	for _, tt := range []struct {
+		args []string
+		want int
+	}{{[]string{"-version"}, 0}, {[]string{"--bogus"}, 2}} {
+		got := -1
+		exit = func(code int) { got = code }
+		os.Args = append([]string{"tidal-tui"}, tt.args...)
+		main()
+		if got != tt.want {
+			t.Errorf("main %v exit = %d, want %d", tt.args, got, tt.want)
+		}
 	}
 }
