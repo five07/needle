@@ -139,3 +139,32 @@ func TestQueueViewWithoutTransport(t *testing.T) {
 		t.Error("queue view without a player")
 	}
 }
+
+// A restored queue opens on the Queue view, focused, with the current
+// track selected; space starts it (decision 59).
+func TestOpenQueue(t *testing.T) {
+	e := newEnv(t)
+	tr := &stubTransport{}
+	e.svc.Transport = tr
+	m := New(Config{Services: e.svc, OpenQueue: true})
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	np := playingNow()
+	np.State, np.Position, np.Duration = Stopped, 0, 0
+	np.Source, np.Output, np.Quality, np.Reason = "", "", 0, "" // nothing loaded yet
+	drive(m, NowPlayingMsg{np})
+	if m.section != SectionQueue || m.focus != paneMain {
+		t.Fatalf("section %d focus %d", m.section, m.focus)
+	}
+	if it, ok := queueView(m).selected(); !ok || it.Handle != np.Current.Handle {
+		t.Errorf("selected %+v, want the current track", it)
+	}
+	golden(t, "queue_restored_80x24", m.render())
+	drive(m, tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if got := tr.got(); !reflect.DeepEqual(got, []string{"pause"}) {
+		t.Errorf("space: %v", got)
+	}
+	// Without it, the app starts on Search with the sidebar focused.
+	if d := e.model(80, 24); d.section != SectionSearch || d.focus != paneSidebar {
+		t.Errorf("default section %d focus %d", d.section, d.focus)
+	}
+}

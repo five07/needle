@@ -151,10 +151,15 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 			fmt.Fprintf(stderr, "needle: %v\n", err)
 			return 1
 		}
-		if err := forgetBestQuality(dirs.State); err != nil {
-			logger.Error("logout failed", "err", err)
-			fmt.Fprintf(stderr, "needle: %v\n", err)
-			return 1
+		for _, forget := range []func() error{
+			func() error { return forgetBestQuality(dirs.State) },
+			func() error { return forgetFile(dirs.State, QueueFile) },
+		} {
+			if err := forget(); err != nil {
+				logger.Error("logout failed", "err", err)
+				fmt.Fprintf(stderr, "needle: %v\n", err)
+				return 1
+			}
 		}
 		logger.Info("logged out")
 		fmt.Fprintln(stdout, "Logged out.")
@@ -220,6 +225,11 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 		return nil, nil, err
 	}
 	q := queue.New[player.Track]()
+	var saved *savedQueue
+	restored := false
+	if stateDir != "" {
+		saved, restored = loadSavedQueue(filepath.Join(stateDir, QueueFile), q, logger)
+	}
 	p := player.New(playerConfig(d, cfg, resolver, q, logger))
 
 	uiCtx, cancel := context.WithCancel(ctx)
@@ -239,24 +249,30 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	} else {
 		best = &bestQuality{logger: logger} // not remembered
 	}
-	w := watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best}
+	w := watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best, saved: saved}
 	mp, stopMPRIS := startMPRIS(d.sessionBus, pb, logger)
 	if mp != nil {
 		w.mpris = mp // only when registered: a nil *Service in the interface would not be nil
 	}
-	go watchStatus(uiCtx, p, w)
+	watched := make(chan struct{})
+	go func() { defer close(watched); watchStatus(uiCtx, p, w) }()
+	if restored {
+		pb.edited() // the bar and Queue view show the restored queue at once
+	}
 	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified,
 		Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device}
 
 	svc := &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
 		Playback: pb, Transport: pb, Logger: logger}
 	model = tui.New(tui.Config{
-		Services: svc,
-		Account:  tui.NewAccountView(svc, acct),
-		Notices:  notices,
-		Status:   status,
+		Services:  svc,
+		Account:   tui.NewAccountView(svc, acct),
+		Notices:   notices,
+		Status:    status,
+		OpenQueue: restored,
 	})
-	return model, func() { cancel(); <-done; stopMPRIS() }, nil
+	// Waiting for the watcher lets its last queue save finish before exit.
+	return model, func() { cancel(); <-done; <-watched; stopMPRIS() }, nil
 }
 
 // account returns the logged-in user, running the browser login first when

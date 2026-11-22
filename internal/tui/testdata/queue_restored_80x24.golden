@@ -1,0 +1,24 @@
+┌ needle ───────────────────────────────────────────────────── ? help ─ q quit ┐
+│   Search      │ ▶ One More Time         Daft Punk      Discovery        5:20 │
+│   Library     │   Aerodynamic           Daft Punk      Discovery        3:32 │
+│   Discovery   │   Digital Love          Daft Punk      Discovery        5:01 │
+│ ▸ Queue (2)   │                                                              │
+│   Account     │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+├───────────────┴──────────────────────────────────────────────────────────────┤
+│                                One More Time                                 │
+│                                                                              │
+│                            Daft Punk · Discovery                             │
+│                                                                              │
+│                                   Stopped                                    │
+│                        ⇄ on    [⏮]  [▶]  [⏭]    ↻ all                        │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ j/k move · h back · enter play / pause · d remove · D clear upcoming         │
+└──────────────────────────────────────────────────────────────────────────────┘

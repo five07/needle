@@ -4,6 +4,7 @@
 package queue
 
 import (
+	"errors"
 	"math/rand/v2"
 	"slices"
 	"sync"
@@ -64,6 +65,7 @@ type Queue[T any] struct {
 	shuffle bool
 	repeat  Repeat
 	rng     *rand.Rand
+	rev     uint64 // incremented by every change
 }
 
 // Option configures a Queue.
@@ -97,6 +99,7 @@ func (q *Queue[T]) newEntry(item T) Handle {
 func (q *Queue[T]) Set(items []T, start int) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	q.orig, q.play, q.items, q.cur = nil, nil, map[Handle]T{}, -1
 	if start < 0 || start >= len(items) {
 		return false
@@ -123,6 +126,7 @@ func (q *Queue[T]) Set(items []T, start int) bool {
 func (q *Queue[T]) PlayNext(item T) Handle {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	h := q.newEntry(item)
 	if q.cur < 0 {
 		q.orig, q.play, q.cur = []Handle{h}, []Handle{h}, 0
@@ -139,6 +143,7 @@ func (q *Queue[T]) PlayNext(item T) Handle {
 func (q *Queue[T]) Add(item T) Handle {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	h := q.newEntry(item)
 	q.orig = append(q.orig, h)
 	q.play = append(q.play, h)
@@ -153,6 +158,7 @@ func (q *Queue[T]) Add(item T) Handle {
 func (q *Queue[T]) Remove(h Handle) bool {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	i := slices.Index(q.play, h)
 	if i <= q.cur {
 		return false
@@ -169,6 +175,7 @@ func (q *Queue[T]) Remove(h Handle) bool {
 func (q *Queue[T]) Clear() {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	if q.cur < 0 {
 		return
 	}
@@ -200,6 +207,7 @@ func (q *Queue[T]) currentLocked() (T, bool) {
 func (q *Queue[T]) Advance() (T, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	if q.repeat == RepeatOne {
 		return q.currentLocked()
 	}
@@ -211,6 +219,7 @@ func (q *Queue[T]) Advance() (T, bool) {
 func (q *Queue[T]) Next() (T, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	return q.stepLocked()
 }
 
@@ -239,6 +248,7 @@ func (q *Queue[T]) stepLocked() (T, bool) {
 func (q *Queue[T]) Previous() (T, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	if q.cur > 0 {
 		q.cur--
 	}
@@ -249,6 +259,7 @@ func (q *Queue[T]) Previous() (T, bool) {
 func (q *Queue[T]) Jump(h Handle) (T, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	i := slices.Index(q.play, h)
 	if i < 0 {
 		var zero T
@@ -264,6 +275,7 @@ func (q *Queue[T]) Jump(h Handle) (T, bool) {
 func (q *Queue[T]) SetShuffle(on bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	if on == q.shuffle {
 		return
 	}
@@ -294,6 +306,7 @@ func (q *Queue[T]) Shuffle() bool {
 func (q *Queue[T]) SetRepeat(r Repeat) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	q.repeat = r
 }
 
@@ -301,6 +314,7 @@ func (q *Queue[T]) SetRepeat(r Repeat) {
 func (q *Queue[T]) CycleRepeat() Repeat {
 	q.mu.Lock()
 	defer q.mu.Unlock()
+	q.rev++
 	q.repeat = (q.repeat + 1) % 3
 	return q.repeat
 }
@@ -341,4 +355,89 @@ func (q *Queue[T]) Snapshot() Snapshot[T] {
 
 func (q *Queue[T]) shuffleSlice(hs []Handle) {
 	q.rng.Shuffle(len(hs), func(i, j int) { hs[i], hs[j] = hs[j], hs[i] })
+}
+
+// Revision returns a number that changes whenever the queue does: its
+// entries, the current entry, shuffle, or repeat. It is never 0 after a
+// change, and only ever grows.
+func (q *Queue[T]) Revision() uint64 {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.rev
+}
+
+// State is the whole queue, for saving it and restoring it later. Items are
+// in their original (unshuffled) order, Play lists indexes into Items in
+// play order, and Current is an index into Play (-1 when empty). Played
+// entries are those before Current.
+type State[T any] struct {
+	Items   []T
+	Play    []int
+	Current int
+	Shuffle bool
+	Repeat  Repeat
+}
+
+// ErrBadState means a State passed to Restore is inconsistent.
+var ErrBadState = errors.New("queue: inconsistent saved state")
+
+// Export returns the queue's state and the revision it belongs to.
+func (q *Queue[T]) Export() (State[T], uint64) {
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	s := State[T]{Current: q.cur, Shuffle: q.shuffle, Repeat: q.repeat}
+	index := make(map[Handle]int, len(q.orig))
+	for i, h := range q.orig {
+		index[h] = i
+		s.Items = append(s.Items, q.items[h])
+	}
+	for _, h := range q.play {
+		s.Play = append(s.Play, index[h])
+	}
+	return s, q.rev
+}
+
+// Restore replaces the queue with s. Entries get new handles. It returns
+// ErrBadState, and leaves the queue unchanged, unless Play orders every
+// item exactly once, Current is inside Play (or -1 with no items), and
+// Repeat is a known mode.
+func (q *Queue[T]) Restore(s State[T]) error {
+	if err := s.valid(); err != nil {
+		return err
+	}
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	q.rev++
+	q.orig, q.play, q.items = nil, nil, map[Handle]T{}
+	for _, it := range s.Items {
+		q.orig = append(q.orig, q.newEntry(it))
+	}
+	for _, i := range s.Play {
+		q.play = append(q.play, q.orig[i])
+	}
+	q.cur, q.shuffle, q.repeat = s.Current, s.Shuffle, s.Repeat
+	return nil
+}
+
+func (s State[T]) valid() error {
+	if len(s.Play) != len(s.Items) || s.Repeat < RepeatOff || s.Repeat > RepeatOne {
+		return ErrBadState
+	}
+	if len(s.Items) == 0 {
+		if s.Current != -1 {
+			return ErrBadState
+		}
+		return nil
+	}
+	if s.Current < 0 || s.Current >= len(s.Play) {
+		return ErrBadState
+	}
+	seen := make([]bool, len(s.Items))
+	for _, i := range s.Play {
+		if i < 0 || i >= len(seen) || seen[i] {
+			return ErrBadState
+		}
+		seen[i] = true
+	}
+	return nil
 }

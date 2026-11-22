@@ -52,6 +52,9 @@ type Config struct {
 	// Services lets the default Search view search and play. Nil leaves
 	// search unavailable.
 	Services *Services
+	// OpenQueue starts on the Queue view, focused, with the current track
+	// selected (a restored queue, decision 59).
+	OpenQueue bool
 }
 
 // NoticeMsg shows Text in the hint line for NoticeDuration.
@@ -123,6 +126,9 @@ func New(cfg Config) *Model {
 			}
 		}
 		m.stacks[i] = []View{v}
+	}
+	if cfg.OpenQueue {
+		m.section, m.focus = SectionQueue, paneMain
 	}
 	m.layout = ComputeLayout(80, 24)
 	return m

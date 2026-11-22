@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -806,5 +807,155 @@ func TestSetPaused(t *testing.T) {
 	h.p.Stop(ctx())
 	if err := h.p.SetPaused(ctx(), false); err != nil || h.p.Status().State != Stopped {
 		t.Errorf("stopped: %v %v", err, h.p.Status().State)
+	}
+}
+
+func TestUnavailableTracksAreSkipped(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b", "c")
+	h.res.errs["a"] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	h.p.Play(ctx())
+	h.waitLoads(2)
+	st := h.waitStatus(func(s Status) bool { return s.State == Loading || s.State == Playing })
+	if c, _ := h.q.Current(); c.ID != "b" {
+		t.Fatalf("current %q, want b", c.ID)
+	}
+	if st.Notice != `Skipped "Song a": This track is not available on TIDAL.` || st.NoticeID != 1 || st.Message != "" {
+		t.Errorf("status %+v", st)
+	}
+	e := h.engine()
+	e.mu.Lock()
+	played := len(e.plays) == 1 && e.plays[0].Key == uint64(h.handle(1))
+	e.mu.Unlock()
+	if !played {
+		t.Errorf("plays %+v", e.plays)
+	}
+}
+
+func TestSkippedTracksInARowAreCounted(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b", "c")
+	h.res.errs["a"] = fmt.Errorf("x: %w", tidal.ErrGeoRestricted)
+	h.res.errs["b"] = fmt.Errorf("x: %w", tidal.ErrInvalidResourceID)
+	h.p.Play(ctx())
+	h.waitLoads(3)
+	st := h.p.Status()
+	if c, _ := h.q.Current(); c.ID != "c" || st.Notice != "Skipped 2 tracks that are not available." || st.NoticeID != 2 {
+		t.Errorf("current %q status %+v", c.ID, st)
+	}
+}
+
+func TestSkipStopsAtTheEndOfTheQueue(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.res.errs["b"] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	h.q.Next() // b is current, and last
+	h.p.Play(ctx())
+	h.waitLoads(1)
+	st := h.p.Status()
+	if c, _ := h.q.Current(); c.ID != "b" || st.State != Stopped || st.Notice == "" || st.Message != "" {
+		t.Errorf("current %q status %+v", c.ID, st)
+	}
+}
+
+func TestSkipStopsAfterAFullPass(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.q.SetRepeat(queue.RepeatAll)
+	for _, id := range []string{"a", "b"} {
+		h.res.errs[id] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	}
+	h.p.Play(ctx())
+	h.waitLoads(2)
+	st := h.waitStatus(func(s Status) bool { return s.State == Stopped })
+	if st.Message != "None of the tracks in the queue can be played." {
+		t.Errorf("status %+v", st)
+	}
+	// It does not keep going round.
+	time.Sleep(50 * time.Millisecond)
+	if n := h.loads.Load(); n != 2 {
+		t.Errorf("loads %d after stopping", n)
+	}
+	// Trying again starts a fresh pass.
+	h.res.mu.Lock()
+	delete(h.res.errs, "b")
+	h.res.mu.Unlock()
+	h.p.Play(ctx())
+	h.waitLoads(3)
+	if c, _ := h.q.Current(); c.ID != "b" || h.p.Status().State != Loading {
+		t.Errorf("after retry current %q status %+v", c.ID, h.p.Status())
+	}
+}
+
+func TestStartedTrackResetsTheSkipCount(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b", "c", "d")
+	h.res.errs["a"] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	h.res.errs["c"] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	h.p.Play(ctx())
+	h.waitLoads(2)
+	e := h.engine()
+	h.send(e, Event{Kind: EventStarted, Key: uint64(h.handle(1))})
+	h.send(e, Event{Kind: EventEnded, Key: uint64(h.handle(1)), Reason: EndEOF})
+	h.waitLoads(4)
+	if st := h.p.Status(); st.Notice != `Skipped "Song c": This track is not available on TIDAL.` {
+		t.Errorf("notice %q: the count was not reset", st.Notice)
+	}
+}
+
+func TestOtherLoadErrorsStillStop(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.res.errs["a"] = fmt.Errorf("x: %w", tidal.ErrPurchaseRequired)
+	h.p.Play(ctx())
+	h.waitLoads(1)
+	st := h.p.Status()
+	if c, _ := h.q.Current(); c.ID != "a" || st.State != Stopped || st.Notice != "" || !strings.Contains(st.Message, "purchased") {
+		t.Errorf("current %q status %+v", c.ID, st)
+	}
+}
+
+// A skip that reaches the end of the queue stops the engine; if that
+// fails, the player still ends up stopped.
+func TestSkipToTheEndWithAStopError(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.res.errs["b"] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+	h.p.Play(ctx())
+	e := h.engine()
+	e.setFail("stop", errors.New("ipc closed"))
+	h.p.Next(ctx())
+	h.waitLoads(2)
+	st := h.waitStatus(func(s Status) bool { return s.State == Stopped })
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !slices.Contains(e.calls, "stop") || st.Notice == "" {
+		t.Errorf("calls %v status %+v", e.calls, st)
+	}
+}
+
+// Playing or skipping by hand in the middle of a run of skips starts a
+// new count.
+func TestUserActionResetsTheSkipCount(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		act  func(h *harness) // each lands on c, which is unavailable
+	}{
+		{"play", func(h *harness) { h.q.Jump(h.handle(2)); h.p.Play(ctx()) }},
+		{"next", func(h *harness) { h.p.Next(ctx()) }},
+		{"previous", func(h *harness) { h.q.Jump(h.handle(3)); h.p.Previous(ctx()) }},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			h := newHarness(t, config.AudioShared, "a", "b", "c", "d")
+			for _, id := range []string{"a", "c"} {
+				h.res.errs[id] = fmt.Errorf("x: %w", tidal.ErrNotFound)
+			}
+			gate := make(chan struct{})
+			h.res.mu.Lock()
+			h.res.gates["b"] = gate
+			h.res.mu.Unlock()
+			h.p.Play(ctx())
+			h.waitLoads(1) // a skipped; b is loading, held at the gate
+			tt.act(h)
+			h.waitLoads(3) // c skipped, d loaded
+			close(gate)    // b's result is now stale
+			want := `Skipped "Song c": This track is not available on TIDAL.`
+			if st := h.p.Status(); st.Notice != want {
+				t.Errorf("notice %q, want %q", st.Notice, want)
+			}
+		})
 	}
 }

@@ -26,12 +26,7 @@ func (c mprisControls) Play(ctx context.Context) error {
 func (c mprisControls) Pause(ctx context.Context) error { return c.b.p.SetPaused(ctx, true) }
 
 // PlayPause toggles, or starts the current track when stopped.
-func (c mprisControls) PlayPause(ctx context.Context) error {
-	if c.b.p.Status().State == player.Stopped {
-		return c.b.p.Play(ctx)
-	}
-	return c.b.p.TogglePause(ctx)
-}
+func (c mprisControls) PlayPause(ctx context.Context) error { return c.b.TogglePause(ctx) }
 
 func (c mprisControls) Stop(ctx context.Context) error     { return c.b.p.Stop(ctx) }
 func (c mprisControls) Next(ctx context.Context) error     { return c.b.Next(ctx) }

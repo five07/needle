@@ -8,7 +8,7 @@ needle is an independent project and is not affiliated with or endorsed by TIDAL
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view, the Account view, and desktop media controls (MPRIS) are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view (kept across restarts), the Account view, and desktop media controls (MPRIS) are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -44,7 +44,7 @@ Tokens are kept in the system keyring through the Secret Service API (GNOME Keyr
 
 Access tokens refresh automatically. If TIDAL revokes the session, needle asks you to log in again.
 
-To log out and remove stored credentials from both the keyring and the file (this also forgets the highest quality shown in the Account view):
+To log out and remove stored credentials from both the keyring and the file (this also forgets the highest quality shown in the Account view and the saved queue):
 
 ```sh
 ./needle -logout
@@ -82,7 +82,7 @@ Sections that are not built yet say so in the main pane. Playing and queueing ar
 | `?` | Show or hide every key for the current screen (`j`/`k` scroll it when it does not fit) |
 | `q` | Quit |
 | `ctrl+c` | Quit, even while typing |
-| `space` | Pause / resume |
+| `space` | Pause / resume, or play the current track when stopped |
 | `n` / `]` | Next track |
 | `p` / `[` | Previous track (on the first track: start it over) |
 | `s` | Shuffle on / off |
@@ -138,6 +138,8 @@ The Queue section lists the track that is playing, then the tracks still to come
 - **`enter`** plays the selected track, or pauses and resumes the one that is playing.
 - **`d`** or **`x`** removes the selected upcoming track. The playing track stays; press `n` to skip it.
 - **`D`** clears every upcoming track. It asks first: press `D` again within 2 seconds. The playing track keeps playing.
+
+The queue is kept across restarts in `$XDG_STATE_HOME/needle/queue.json` (mode `0600`): the tracks already played, the current track, the ones still to come (in their shuffled order, if shuffle is on), and the shuffle and repeat settings. It is saved after every change to it, not while a track plays, so it survives a crash too; the position within a track is not kept. When there is a saved queue, needle opens on the Queue view with the current track selected and waits: press `space`, `enter`, or the play button to start it. A damaged saved queue, or one over 10,000 tracks, is ignored (and logged), and a queue longer than that is not saved.
 
 ### Account
 
@@ -203,7 +205,7 @@ The next track in the queue is fetched about 45 seconds before the current one e
 
 ### Errors
 
-A missing mpv, a busy device, an output that cannot be opened, or an mpv crash stops playback with a message instead of hanging. If a stream breaks mid-track (usually because its signed links expired), needle fetches a fresh stream once and resumes from the same position.
+A missing mpv, a busy device, an output that cannot be opened, or an mpv crash stops playback with a message instead of hanging. A track that is no longer on TIDAL, or not available in your country, is skipped with a notice and the next one plays, in any queue; if every track in the queue fails that way, playback stops with a message instead of going round with repeat on. Other per-track errors (a track that must be purchased, or that TIDAL does not let this app play) still stop playback with a message. If a stream breaks mid-track (usually because its signed links expired), needle fetches a fresh stream once and resumes from the same position.
 
 ### Quitting
 

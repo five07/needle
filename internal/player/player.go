@@ -3,6 +3,7 @@ package player
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -56,6 +57,11 @@ type Status struct {
 	VolumeEnabled bool
 	// Message is a user-facing error or notice, empty when all is well.
 	Message string
+	// Notice is the latest passing notice, such as a skipped track.
+	// NoticeID changes with every new one, so the same text twice is
+	// still shown twice.
+	Notice   string
+	NoticeID uint64
 }
 
 // Config configures a Player.
@@ -103,6 +109,7 @@ type Player struct {
 	preloaded  queue.Handle
 	preloading bool
 	resumed    map[queue.Handle]bool
+	skipped    int // unavailable tracks skipped in a row (decision 58)
 	format     Event
 	st         Status
 
@@ -195,6 +202,7 @@ func (p *Player) Play(ctx context.Context) error {
 		if s.Current == nil {
 			return nil
 		}
+		p.skipped = 0
 		p.load(s.Current.Handle, s.Current.Item, 0)
 		return nil
 	})
@@ -203,6 +211,7 @@ func (p *Player) Play(ctx context.Context) error {
 // Next skips to the next track.
 func (p *Player) Next(ctx context.Context) error {
 	return p.do(ctx, func(rctx context.Context) error {
+		p.skipped = 0
 		if _, ok := p.cfg.Queue.Next(); !ok {
 			return p.stop(rctx)
 		}
@@ -214,6 +223,7 @@ func (p *Player) Next(ctx context.Context) error {
 // Previous goes back one track, or restarts the first one.
 func (p *Player) Previous(ctx context.Context) error {
 	return p.do(ctx, func(context.Context) error {
+		p.skipped = 0
 		if _, ok := p.cfg.Queue.Previous(); ok {
 			p.loadCurrent()
 		}
@@ -345,6 +355,10 @@ func (p *Player) onLoaded(ctx context.Context, r loadResult) {
 		return
 	}
 	if r.err != nil {
+		if unavailable(r.err) {
+			p.skip(ctx, r)
+			return
+		}
 		p.fail(r.track.ID, r.err)
 		return
 	}
@@ -372,6 +386,50 @@ func (p *Player) ensureEngine(ctx context.Context) error {
 	return nil
 }
 
+// unavailable reports whether err means the track itself cannot be played
+// here: it is gone from TIDAL, or not available in the account's country.
+func unavailable(err error) bool {
+	return errors.Is(err, tidal.ErrNotFound) || errors.Is(err, tidal.ErrInvalidResourceID) ||
+		errors.Is(err, tidal.ErrGeoRestricted)
+}
+
+// skip moves past a track that is not available, with a notice (decision
+// 58). After a whole pass of such tracks in a row it stops, so repeat all
+// cannot go round forever.
+func (p *Player) skip(ctx context.Context, r loadResult) {
+	p.logger.Warn("track unavailable, skipping", "track_id", r.track.ID, "err", r.err)
+	p.skipped++
+	if p.skipped == 1 {
+		p.notice(`Skipped "` + r.track.Title + `": ` + stream.Message(r.err))
+	} else {
+		p.notice(fmt.Sprintf("Skipped %d tracks that are not available.", p.skipped))
+	}
+	if p.skipped >= p.cfg.Queue.Len() {
+		p.skipped = 0
+		p.halt(ctx)
+		p.st.Message = "None of the tracks in the queue can be played."
+		return
+	}
+	if _, ok := p.cfg.Queue.Next(); !ok {
+		p.skipped = 0
+		p.halt(ctx) // the end of the queue
+		return
+	}
+	p.loadCurrent()
+}
+
+// halt stops playback from inside the Run loop, logging an engine error.
+func (p *Player) halt(ctx context.Context) {
+	if err := p.stop(ctx); err != nil {
+		p.logger.Warn("stop failed", "err", err)
+	}
+}
+
+func (p *Player) notice(text string) {
+	p.st.Notice = text
+	p.st.NoticeID++
+}
+
 // fail stops with a user-facing message.
 func (p *Player) fail(trackID string, err error) {
 	p.logger.Error("playback failed", "track_id", trackID, "err", err)
@@ -388,6 +446,7 @@ func (p *Player) onEvent(ctx context.Context, ev Event) {
 		m := p.manifests[h]
 		src := SourceOf(m)
 		p.st.State, p.st.Source, p.st.Message = Playing, &src, ""
+		p.skipped = 0
 		p.st.Preview, p.st.PreviewMessage = m.Preview(), ""
 		if m.Preview() {
 			p.st.PreviewMessage = stream.PreviewMessage(m.PreviewReason)

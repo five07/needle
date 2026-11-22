@@ -340,6 +340,30 @@ The scope was simplified: login stays in the terminal before the TUI starts (it 
     - b) Writes set mpv's software volume in shared mode now.
     > MS: a
 
+### TASK-016 (queue persistence)
+
+58. **Tracks that are no longer available** (AC #2). Today a track that fails to load stops playback with a message. The API client has no call yet that looks up many track IDs at once.
+    - a) **(Recommended)** Check when a track comes up to play: no extra requests at startup. If any queued track fails because it is gone from TIDAL or not available in your country, playback skips to the next track with a notice instead of stopping. This applies to every queue, not only a restored one, and playback stops after one full pass of failures, so repeat all cannot loop forever.
+    - b) Check at startup: look up the restored IDs in batches (`/tracks?filter[id]=`, 20 per request; you would verify the endpoint with the spike tool first), drop the missing ones, and show "N tracks are no longer on TIDAL and were removed". A 500-track queue costs 25 requests per launch.
+    - c) Both (a) and (b).
+    > MS: a
+
+59. **What a restored queue looks like.**
+    - a) **(Recommended)** History, the current track, upcoming tracks, shuffle (including the shuffled order), and repeat come back. The current track waits at its start, stopped; nothing plays until you press play.
+    - b) As (a), plus the position within the current track, saved at a clean exit; play resumes from there. A crash or kill restarts the track from the beginning.
+    - c) As (a), and playback starts on launch.
+    > MS: a, but set the Queue as the initial sidebar option and the "current track" selected. A simple space bar/play button will start play
+
+60. **When the queue is saved.**
+    - a) **(Recommended)** After every change to it (adding, removing, clearing, a new current track, shuffle, repeat), written atomically to a `0600` file, and only when something changed. Position updates do not trigger writes. A crash or kill keeps the last state.
+    - b) Only at a clean exit.
+    > MS: a
+
+61. **`-logout` and the saved queue.**
+    - a) **(Recommended)** `-logout` deletes the saved queue too, like the remembered best quality (decision 52), so nothing about your listening stays behind.
+    - b) Keep it; only the login is removed.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -436,6 +460,10 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 55 | D-Bus library | `github.com/godbus/dbus/v5` becomes a direct dependency (already indirect through go-keyring). |
 | 56 | MPRIS album art | None, and no follow-up task; the user may add it later. |
 | 57 | MPRIS volume | Reported read-only; writes are ignored and logged at debug level until TASK-018 decides. |
+| 58 | Unavailable tracks | Checked when a track comes up to play, with no startup requests. A track gone from TIDAL or not available in the country is skipped with a notice, in every queue; playback stops after one full pass of failures. |
+| 59 | Restored queue | History, current, upcoming, shuffle (with its order), and repeat come back, stopped at the start of the current track. The app opens on the Queue view with the current track selected; space or the play button starts it. |
+| 60 | Queue saving | After every change, atomically, to a `0600` file, only when something changed; position updates never write. |
+| 61 | Logout and the queue | `-logout` deletes the saved queue, like the best quality. |
 
 ## Definition of Done
 

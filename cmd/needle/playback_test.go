@@ -438,11 +438,19 @@ func TestTransportMethods(t *testing.T) {
 	if err := b.PlayFrom(ctx, []tidal.Track{tt("1"), tt("2"), tt("3")}, 0); err != nil || !pending() {
 		t.Fatalf("PlayFrom: %v", err)
 	}
+	p.state = player.Playing
 	b.TogglePause(ctx)
 	b.Next(ctx)
 	b.Previous(ctx)
 	if p.pauses != 1 || p.nexts != 1 || p.prevs != 1 || pending() {
 		t.Errorf("player calls %+v (transport keys must not signal a queue edit)", p)
+	}
+	// Stopped (a restored queue, decision 59): space starts the current
+	// track instead of toggling.
+	p.state = player.Stopped
+	b.TogglePause(ctx)
+	if p.pauses != 1 || p.plays != 2 {
+		t.Errorf("stopped: %+v", p)
 	}
 	tests := []struct {
 		name  string
@@ -464,14 +472,14 @@ func TestTransportMethods(t *testing.T) {
 			t.Errorf("%s: err %v, queue %v", tc.name, err, queued(q))
 		}
 	}
-	if p.plays != 2 || p.changes != 6 { // clear's Add counts too
+	if p.plays != 3 || p.changes != 6 { // the stopped toggle plays; clear's Add changes
 		t.Errorf("plays %d changes %d", p.plays, p.changes)
 	}
 	// A handle that is gone fails without touching the player.
 	if err := b.Jump(ctx, 999); !errors.Is(err, errNotQueued) {
 		t.Errorf("jump to a gone entry: %v", err)
 	}
-	if err := b.Remove(ctx, 999); !errors.Is(err, errNotQueued) || p.plays != 2 || p.changes != 6 {
+	if err := b.Remove(ctx, 999); !errors.Is(err, errNotQueued) || p.plays != 3 || p.changes != 6 {
 		t.Errorf("remove a gone entry: %v", err)
 	}
 	// Without a listener, edits never block.

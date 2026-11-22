@@ -100,7 +100,14 @@ func (b *playback) Add(ctx context.Context, tracks []tidal.Track) error {
 }
 
 // TogglePause implements tui.Transport.
-func (b *playback) TogglePause(ctx context.Context) error { return b.p.TogglePause(ctx) }
+// With nothing playing, it starts the current track (a restored queue
+// waits stopped, decision 59).
+func (b *playback) TogglePause(ctx context.Context) error {
+	if b.p.Status().State == player.Stopped {
+		return b.p.Play(ctx)
+	}
+	return b.p.TogglePause(ctx)
+}
 
 // Next implements tui.Transport.
 func (b *playback) Next(ctx context.Context) error { return b.p.Next(ctx) }
@@ -179,6 +186,8 @@ type watch struct {
 	best *bestQuality
 	// mpris, when set, receives every change for desktop widgets.
 	mpris interface{ Update(mpris.State) }
+	// saved, when set, keeps the queue file up to date (decision 60).
+	saved *savedQueue
 	now   func() time.Time // default time.Now
 }
 
@@ -186,9 +195,13 @@ type watch struct {
 // only reader of p.Updates, which coalesces signals.
 func watchStatus(ctx context.Context, p statusSource, w watch) {
 	last := ""
+	var lastNotice uint64
 	for {
 		select {
 		case <-ctx.Done():
+			if w.saved != nil {
+				w.saved.save() // a change made just before quitting
+			}
 			return
 		case <-p.Updates():
 		case <-w.changed:
@@ -211,6 +224,9 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 				sendLatest(w.status, np)
 			}
 		}
+		if w.saved != nil {
+			w.saved.save()
+		}
 		if msg := st.Message; msg != "" && msg != last {
 			select {
 			case w.notices <- msg:
@@ -219,6 +235,14 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 			}
 		}
 		last = st.Message
+		if st.NoticeID != lastNotice && st.Notice != "" {
+			select {
+			case w.notices <- st.Notice:
+			case <-ctx.Done():
+				return
+			}
+		}
+		lastNotice = st.NoticeID
 	}
 }
 

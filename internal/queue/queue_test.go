@@ -391,3 +391,114 @@ func TestConcurrentUse(t *testing.T) {
 		t.Errorf("snapshot has %d entries, Len = %d", got, q.Len())
 	}
 }
+
+func TestExportRestoreRoundTrip(t *testing.T) {
+	q := newQueue("a", "b", "c", "d", "e")
+	q.Next()
+	q.SetShuffle(true)
+	q.SetRepeat(RepeatAll)
+	want := render(q)
+	st, rev := q.Export()
+	if rev != q.Revision() {
+		t.Errorf("Export revision %d, Revision %d", rev, q.Revision())
+	}
+
+	r := newQueue("x")
+	before := r.Revision()
+	if err := r.Restore(st); err != nil {
+		t.Fatal(err)
+	}
+	if got := render(r); got != want {
+		t.Errorf("restored %q, want %q", got, want)
+	}
+	if !r.Shuffle() || r.Repeat() != RepeatAll || r.Revision() == before {
+		t.Errorf("shuffle %v repeat %v revision %d", r.Shuffle(), r.Repeat(), r.Revision())
+	}
+	// The original order survives: turning shuffle off puts the unplayed
+	// entries back in it.
+	r.SetShuffle(false)
+	if got := render(r); got != "a [b] c,d,e" {
+		t.Errorf("after unshuffle %q", got)
+	}
+	// Restored entries get fresh, usable handles.
+	up := r.Snapshot().Upcoming
+	if !r.Remove(up[0].Handle) || r.Len() != 4 {
+		t.Errorf("remove restored entry: len %d", r.Len())
+	}
+}
+
+func TestRestoreEmpty(t *testing.T) {
+	q := newQueue()
+	q.SetRepeat(RepeatOne)
+	st, _ := q.Export()
+	if st.Current != -1 || len(st.Items) != 0 {
+		t.Fatalf("empty export %+v", st)
+	}
+	r := newQueue("a")
+	if err := r.Restore(st); err != nil {
+		t.Fatal(err)
+	}
+	if r.Len() != 0 || r.Repeat() != RepeatOne {
+		t.Errorf("len %d repeat %v", r.Len(), r.Repeat())
+	}
+}
+
+func TestRestoreRejectsBadState(t *testing.T) {
+	items := []string{"a", "b", "c"}
+	tests := map[string]State[string]{
+		"play shorter than items": {Items: items, Play: []int{0, 1}, Current: 0},
+		"repeated index":          {Items: items, Play: []int{0, 1, 1}, Current: 0},
+		"index too large":         {Items: items, Play: []int{0, 1, 3}, Current: 0},
+		"negative index":          {Items: items, Play: []int{0, 1, -1}, Current: 0},
+		"current past the end":    {Items: items, Play: []int{0, 1, 2}, Current: 3},
+		"current negative":        {Items: items, Play: []int{0, 1, 2}, Current: -1},
+		"empty with current":      {Current: 0},
+		"unknown repeat":          {Items: items, Play: []int{0, 1, 2}, Current: 0, Repeat: 3},
+		"negative repeat":         {Items: items, Play: []int{0, 1, 2}, Current: 0, Repeat: -1},
+	}
+	for name, st := range tests {
+		q := newQueue("keep")
+		if err := q.Restore(st); err != ErrBadState {
+			t.Errorf("%s: err %v", name, err)
+		}
+		if got := render(q); got != " [keep] " {
+			t.Errorf("%s: queue changed to %q", name, got)
+		}
+	}
+}
+
+func TestRevisionChangesOnEveryEdit(t *testing.T) {
+	q := newQueue("a", "b", "c")
+	edits := map[string]func(){
+		"Set":         func() { q.Set([]string{"a", "b", "c"}, 0) },
+		"PlayNext":    func() { q.PlayNext("n") },
+		"Add":         func() { q.Add("z") },
+		"Remove":      func() { q.Remove(q.Snapshot().Upcoming[0].Handle) },
+		"Next":        func() { q.Next() },
+		"Advance":     func() { q.Advance() },
+		"Previous":    func() { q.Previous() },
+		"Jump":        func() { q.Jump(q.Snapshot().Upcoming[0].Handle) },
+		"SetShuffle":  func() { q.SetShuffle(!q.Shuffle()) },
+		"SetRepeat":   func() { q.SetRepeat(RepeatAll) },
+		"CycleRepeat": func() { q.CycleRepeat() },
+		"Clear":       func() { q.Clear() },
+	}
+	for _, name := range []string{"Set", "PlayNext", "Add", "Remove", "Next", "Advance", "Previous", "Jump", "SetShuffle", "SetRepeat", "CycleRepeat", "Clear"} {
+		before := q.Revision()
+		edits[name]()
+		if q.Revision() <= before {
+			t.Errorf("%s: revision %d, was %d", name, q.Revision(), before)
+		}
+	}
+	// Reading does not change it.
+	before := q.Revision()
+	q.Current()
+	q.Snapshot()
+	q.Export()
+	q.Len()
+	q.Shuffle()
+	q.Repeat()
+	if q.Revision() != before {
+		t.Error("a read changed the revision")
+	}
+}
