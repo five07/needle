@@ -292,6 +292,23 @@ API facts below come from the official OpenAPI spec v1.10.258 and a live probe o
     - b) Move it to sub-tabs in this task.
     > MS: a
 
+### TASK-013 (now-playing bar)
+
+47. **The 2x title (OSC 66).** The TUI renderer, Charm's cell buffer, drops every OSC escape except hyperlinks, so a 2x title can't be drawn as part of the normal frame. It would have to be written to the terminal outside the frame after each redraw, with cursor moves. That path may flicker or get erased when the renderer repaints the row. Also, only kitty implements OSC 66 as far as I know. Your terminal is Ghostty, which I don't believe supports it yet, so you would see the bold fallback.
+    - a) **(Recommended)** Bold title on 2 rows now (the blank second row keeps the layout from UI.md). Split the real 2x title into its own backlog task, which starts with a spike in kitty. AC #1 is checked against the bold fallback.
+    - b) Try it in this task: write the title out of frame, only when kitty is detected (`TERM=xterm-kitty` or `KITTY_WINDOW_ID`), bold everywhere else. Drop it if the spike shows flicker.
+    > MS: a
+
+48. **What counts as "the track that is currently playing" for enter (AC #8).**
+    - a) **(Recommended)** The same track ID as the current track, in any list. Enter on it toggles pause, even if you started playback from a different album or playlist.
+    - b) Only when the queue was started from this same list; in another list, enter replaces the queue as today.
+    > MS: a
+
+49. **Clearing the queue (AC #6).** `D` clears the upcoming tracks (the current track keeps playing). `d`/`x` remove the selected upcoming track.
+    - a) **(Recommended)** `D` asks first: a notice "Press D again to clear the queue" and a second `D` within 2 s clears it.
+    - b) `D` clears at once, with a notice saying how many tracks were removed.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -379,6 +396,9 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 37 | Rename migration | None. Run `tidal-tui -logout` before switching and move `config.toml` by hand; the README says nothing about it. |
 | 38 | Rename timing | After v1 is feature-complete, as its own ticket. Until then the code, paths, and docs keep `tidal-tui`. |
 | 39 | Affiliation notice | One README line under the intro, "needle is an independent project and is not affiliated with or endorsed by TIDAL.", also printed by `-version`. |
+| 47 | Now-playing title | Bold on 2 rows (the second row blank); the real 2x title (OSC 66) is its own task, starting with a spike in kitty. |
+| 48 | Enter on the current track | Same track ID as the current track, in any list, toggles pause. |
+| 49 | Clearing the queue | `D` asks first ("Press D again to clear the queue"); a second `D` within 2 s clears the upcoming tracks. |
 
 ## Definition of Done
 

@@ -18,6 +18,8 @@ var (
 	styleHeading     = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Blue)
 	styleNotice      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Green)
 	styleKey         = lipgloss.NewStyle().Bold(true)
+	styleGood        = lipgloss.NewStyle().Foreground(lipgloss.Green)
+	styleWarn        = lipgloss.NewStyle().Foreground(lipgloss.Yellow)
 )
 
 // fit truncates s to width cells (with an ellipsis) and pads it with

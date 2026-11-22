@@ -19,16 +19,20 @@ import (
 	"github.com/five07/tidal-tui/internal/player"
 	"github.com/five07/tidal-tui/internal/queue"
 	"github.com/five07/tidal-tui/internal/tidal"
+	"github.com/five07/tidal-tui/internal/tui"
 )
 
 // stubTransport counts player calls.
 type stubTransport struct {
-	plays, changes int
-	err            error
+	plays, changes, pauses, nexts, prevs int
+	err                                  error
 }
 
 func (s *stubTransport) Play(context.Context) error         { s.plays++; return s.err }
 func (s *stubTransport) QueueChanged(context.Context) error { s.changes++; return s.err }
+func (s *stubTransport) TogglePause(context.Context) error  { s.pauses++; return s.err }
+func (s *stubTransport) Next(context.Context) error         { s.nexts++; return s.err }
+func (s *stubTransport) Previous(context.Context) error     { s.prevs++; return s.err }
 
 func tt(id string) tidal.Track {
 	return tidal.Track{ID: id, Title: "T" + id, Version: "Live", Artists: []string{"A", "B"}, Album: "Al", Duration: time.Minute}
@@ -139,7 +143,7 @@ func TestWatchStatus(t *testing.T) {
 	out := make(chan string, 8)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
-	go func() { watchStatus(ctx, src, out); close(done) }()
+	go func() { watchStatus(ctx, src, watch{notices: out}); close(done) }()
 
 	for _, m := range []string{"mpv is not installed.", "mpv is not installed.", "", "mpv is not installed.", "busy"} {
 		src.set(m)
@@ -160,7 +164,7 @@ func TestWatchStatus(t *testing.T) {
 	src = &stubStatus{updates: make(chan struct{}, 1)}
 	ctx, cancel = context.WithCancel(context.Background())
 	done = make(chan struct{})
-	go func() { watchStatus(ctx, src, make(chan string)); close(done) }()
+	go func() { watchStatus(ctx, src, watch{notices: make(chan string)}); close(done) }()
 	src.set("stuck")
 	cancel()
 	select {
@@ -401,4 +405,135 @@ func TestNewUIIgnoresBadLocale(t *testing.T) {
 		t.Fatal(err)
 	}
 	stop()
+}
+
+func TestTransportMethods(t *testing.T) {
+	ctx := context.Background()
+	q := queue.New[player.Track]()
+	p := &stubTransport{}
+	b := &playback{q: q, p: p, changed: make(chan struct{}, 1)}
+	pending := func() bool {
+		select {
+		case <-b.changed:
+			return true
+		default:
+			return false
+		}
+	}
+	if err := b.PlayFrom(ctx, []tidal.Track{tt("1"), tt("2"), tt("3")}, 0); err != nil || !pending() {
+		t.Fatalf("PlayFrom: %v", err)
+	}
+	b.TogglePause(ctx)
+	b.Next(ctx)
+	b.Previous(ctx)
+	if p.pauses != 1 || p.nexts != 1 || p.prevs != 1 || pending() {
+		t.Errorf("player calls %+v (transport keys must not signal a queue edit)", p)
+	}
+	tests := []struct {
+		name  string
+		do    func() error
+		check func() bool
+	}{
+		{"shuffle", func() error { return b.SetShuffle(ctx, true) }, q.Shuffle},
+		{"unshuffle", func() error { return b.SetShuffle(ctx, false) }, func() bool { return !q.Shuffle() }},
+		{"repeat", func() error { return b.CycleRepeat(ctx) }, func() bool { return q.Repeat() == queue.RepeatAll }},
+		{"remove", func() error { return b.Remove(ctx, uint64(q.Snapshot().Upcoming[0].Handle)) },
+			func() bool { return reflect.DeepEqual(queued(q), []string{"*1", "3"}) }},
+		{"jump", func() error { return b.Jump(ctx, uint64(q.Snapshot().Upcoming[0].Handle)) },
+			func() bool { return reflect.DeepEqual(queued(q), []string{"*3"}) }},
+		{"clear", func() error { b.Add(ctx, []tidal.Track{tt("4")}); pending(); return b.Clear(ctx) },
+			func() bool { return reflect.DeepEqual(queued(q), []string{"*3"}) }},
+	}
+	for _, tc := range tests {
+		if err := tc.do(); err != nil || !tc.check() || !pending() {
+			t.Errorf("%s: err %v, queue %v", tc.name, err, queued(q))
+		}
+	}
+	if p.plays != 2 || p.changes != 6 { // clear's Add counts too
+		t.Errorf("plays %d changes %d", p.plays, p.changes)
+	}
+	// A handle that is gone fails without touching the player.
+	if err := b.Jump(ctx, 999); !errors.Is(err, errNotQueued) {
+		t.Errorf("jump to a gone entry: %v", err)
+	}
+	if err := b.Remove(ctx, 999); !errors.Is(err, errNotQueued) || p.plays != 2 || p.changes != 6 {
+		t.Errorf("remove a gone entry: %v", err)
+	}
+	// Without a listener, edits never block.
+	(&playback{q: q, p: p}).Clear(ctx)
+}
+
+func TestNowPlaying(t *testing.T) {
+	q := queue.New[player.Track]()
+	q.Set([]player.Track{{ID: "1", Title: "One", Artists: "A", Album: "Al", Duration: time.Minute}, {ID: "2"}}, 0)
+	q.CycleRepeat()
+	snap := q.Snapshot()
+	tests := []struct {
+		name string
+		st   player.Status
+		want tui.NowPlaying
+	}{
+		{"loading, not assessed", player.Status{State: player.Loading, Duration: time.Minute,
+			Source: &player.Source{Codec: "FLAC", BitDepth: 24, SampleRate: 96000}},
+			tui.NowPlaying{State: tui.Loading, Duration: time.Minute, Source: "FLAC 24/96"}},
+		{"bit-perfect", player.Status{State: player.Playing, Position: time.Second,
+			Source: &player.Source{Codec: "FLAC", BitDepth: 16, SampleRate: 44100}, Output: &player.HWParams{Format: "S16_LE", Rate: 44100},
+			Indicator: player.Assessment{State: player.BitPerfect, Reason: "exclusive output at the source format"}},
+			tui.NowPlaying{State: tui.Playing, Position: time.Second, Source: "FLAC 16/44.1", Output: "16/44.1",
+				Quality: tui.QualityBitPerfect, Reason: "exclusive output at the source format"}},
+		{"matched, float output", player.Status{State: player.Paused, Preview: true,
+			Source: &player.Source{Codec: "AAC", SampleRate: 44100}, Output: &player.HWParams{Format: "FLOAT_LE", Rate: 48000},
+			Indicator: player.Assessment{State: player.RateMatched, Reason: "lossy source"}},
+			tui.NowPlaying{State: tui.Paused, Preview: true, Source: "AAC 44.1 kHz", Output: "48 kHz", Quality: tui.QualityMatched, Reason: "lossy source"}},
+		{"altered", player.Status{Source: &player.Source{Codec: "FLAC"}, Output: &player.HWParams{},
+			Indicator: player.Assessment{State: player.Altered, Reason: "output format unknown"}},
+			tui.NowPlaying{Source: "FLAC 0 kHz", Quality: tui.QualityAltered, Reason: "output format unknown"}},
+		{"reason without a source", player.Status{Indicator: player.Assessment{State: player.BitPerfect, Reason: "x"}}, tui.NowPlaying{}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := nowPlaying(tc.st, snap, config.AudioExclusive)
+			want := tc.want
+			want.Mode, want.Repeat = "exclusive", tui.RepeatAll
+			want.Current = &tui.QueueItem{Handle: uint64(snap.Current.Handle), Track: tui.QueueTrack{ID: "1", Title: "One", Artists: "A", Album: "Al", Duration: time.Minute}}
+			want.Upcoming = []tui.QueueItem{{Handle: uint64(snap.Upcoming[0].Handle), Track: tui.QueueTrack{ID: "2"}}}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("got  %+v\nwant %+v", got, want)
+			}
+		})
+	}
+	if np := nowPlaying(player.Status{}, queue.Snapshot[player.Track]{Shuffle: true}, config.AudioShared); np.Current != nil || !np.Shuffle || np.Mode != "shared" {
+		t.Errorf("empty queue: %+v", np)
+	}
+}
+
+func TestWatchStatusSnapshots(t *testing.T) {
+	src := &stubStatus{updates: make(chan struct{})}
+	q := queue.New[player.Track]()
+	status := make(chan tui.NowPlaying, 1)
+	changed := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		watchStatus(ctx, src, watch{notices: make(chan string, 8), status: status, q: q, changed: changed, mode: config.AudioShared})
+		close(done)
+	}()
+	src.set("") // a player change
+	q.Set([]player.Track{{ID: "7"}}, 0)
+	src.mu.Lock()
+	src.pending = append(src.pending, "")
+	src.mu.Unlock()
+	changed <- struct{}{} // a queue edit: the newer snapshot replaces the untaken one
+	src.set("")
+	cancel()
+	<-done
+	np := <-status
+	if np.Current == nil || np.Current.Track.ID != "7" || np.Mode != "shared" {
+		t.Errorf("latest snapshot = %+v", np)
+	}
+	select {
+	case np := <-status:
+		t.Errorf("a second snapshot was queued: %+v", np)
+	default:
+	}
 }

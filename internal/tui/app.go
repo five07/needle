@@ -46,6 +46,9 @@ type Config struct {
 	// Notices, when set, delivers texts from outside the UI (such as
 	// playback errors) to show as notices.
 	Notices <-chan string
+	// Status, when set, delivers player snapshots for the now-playing bar
+	// and the Queue view.
+	Status <-chan NowPlaying
 	// Services lets the default Search view search and play. Nil leaves
 	// search unavailable.
 	Services *Services
@@ -78,14 +81,25 @@ type Model struct {
 	last     click
 	now      func() time.Time
 	notices  <-chan string
+	status   <-chan NowPlaying
 	svc      *Services
 	opened   map[View]bool // views whose Open has run
 	shown    View          // the view openCurrent last saw
+
+	// The scrolling title: the track it belongs to, when it started, and
+	// the tick chain.
+	marqueeTrack uint64
+	marqueeFrom  time.Time
+	marqueeOn    bool
+	marqueeGen   int
 }
 
 // New returns the shell with the given section views.
 func New(cfg Config) *Model {
-	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices, svc: cfg.Services, opened: map[View]bool{}}
+	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices, status: cfg.Status, svc: cfg.Services, opened: map[View]bool{}}
+	if m.svc == nil {
+		m.svc = &Services{}
+	}
 	if m.now == nil {
 		m.now = time.Now
 	}
@@ -94,6 +108,9 @@ func New(cfg Config) *Model {
 	}
 	if cfg.Discovery == nil && cfg.Services != nil && cfg.Services.Discovery != nil {
 		cfg.Discovery = NewDiscoveryView(cfg.Services)
+	}
+	if cfg.Queue == nil && cfg.Services != nil && cfg.Services.Transport != nil {
+		cfg.Queue = NewQueueView(cfg.Services)
 	}
 	roots := [sectionCount]View{cfg.Search, cfg.Library, cfg.Discovery, cfg.Queue, cfg.Account}
 	names := [sectionCount]string{"Search", "Library", "Discovery", "Queue", "Account"}
@@ -112,7 +129,7 @@ func New(cfg Config) *Model {
 }
 
 // Init implements tea.Model.
-func (m *Model) Init() tea.Cmd { return m.listen() }
+func (m *Model) Init() tea.Cmd { return tea.Batch(m.listen(), m.listenStatus()) }
 
 type noticeChanMsg struct{ text string }
 
@@ -176,6 +193,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case noticeChanMsg:
 		return m, tea.Batch(Notify(msg.text), m.listen())
+	case NowPlayingMsg:
+		m.svc.playing = msg.NowPlaying
+		return m, tea.Batch(m.nowPlayingChanged(), m.startMarquee(), m.listenStatus())
+	case marqueeMsg:
+		return m, m.onMarquee(msg)
 	case PopMsg:
 		m.pop()
 	case CloseMsg:
@@ -246,6 +268,16 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 	case key.Matches(k, Keys.Sections):
 		m.selectSection(Section(k.String()[0] - '1'))
 		return nil
+	case key.Matches(k, Keys.PlayPause):
+		return m.transport(actPlayPause)
+	case key.Matches(k, Keys.NextTrack):
+		return m.transport(actNext)
+	case key.Matches(k, Keys.PrevTrack):
+		return m.transport(actPrevious)
+	case key.Matches(k, Keys.Shuffle):
+		return m.transport(actShuffle)
+	case key.Matches(k, Keys.Repeat):
+		return m.transport(actRepeat)
 	}
 	if m.focus == paneSidebar {
 		switch {
@@ -304,6 +336,13 @@ func (m *Model) onClick(ms tea.Mouse) tea.Cmd {
 	case l.Main.Contains(ms.X, ms.Y):
 		m.focus = paneMain
 		return m.current().Update(ClickMsg{X: ms.X - l.Main.X - 1, Y: ms.Y - l.Main.Y, Double: double})
+	case l.Bar.Contains(ms.X, ms.Y) && ms.Y-l.Bar.Y == barControls && m.svc.playing.Current != nil:
+		_, zones := controlsLine(m.svc.playing, l.Bar.W)
+		for _, z := range zones {
+			if x := ms.X - l.Bar.X; x >= z.x0 && x < z.x1 {
+				return m.transport(z.act) // AC #5
+			}
+		}
 	}
 	return nil
 }
@@ -368,9 +407,7 @@ func (m *Model) openCurrent() tea.Cmd {
 // favoriteChanged records a finished favorite change, tells every open
 // view (so markers and Library lists update), and confirms it.
 func (m *Model) favoriteChanged(msg FavoriteMsg) tea.Cmd {
-	if m.svc != nil {
-		m.svc.favs().set(msg.Collection, msg.ID, msg.Added)
-	}
+	m.svc.favs().set(msg.Collection, msg.ID, msg.Added)
 	cmds := []tea.Cmd{}
 	for _, stack := range m.stacks {
 		for _, v := range stack {

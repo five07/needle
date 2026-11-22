@@ -55,6 +55,22 @@ type Playback interface {
 	Add(ctx context.Context, tracks []tidal.Track) error
 }
 
+// Transport drives the player and edits the queue. The views call it from
+// commands, off the UI goroutine. Handles come from NowPlaying.
+type Transport interface {
+	TogglePause(ctx context.Context) error
+	Next(ctx context.Context) error
+	Previous(ctx context.Context) error
+	SetShuffle(ctx context.Context, on bool) error
+	CycleRepeat(ctx context.Context) error
+	// Jump plays the queued entry h.
+	Jump(ctx context.Context, h uint64) error
+	// Remove deletes the upcoming entry h.
+	Remove(ctx context.Context, h uint64) error
+	// Clear removes every upcoming entry; the current one keeps playing.
+	Clear(ctx context.Context) error
+}
+
 // Timings and limits for the catalog views.
 const (
 	// SearchDebounce is how long typing must pause before a search starts.
@@ -77,6 +93,7 @@ type Services struct {
 	Library   Library
 	Discovery Discovery
 	Playback  Playback
+	Transport Transport
 	// Logger receives failures in full; the UI shows short messages.
 	Logger *slog.Logger
 	// Tick schedules fn after d. Default tea.Tick (tests replace it).
@@ -87,6 +104,9 @@ type Services struct {
 	// known holds favorite state learned this session. Only the UI
 	// goroutine touches it.
 	known *favorites
+	// playing is the latest player snapshot. Only the UI goroutine
+	// touches it.
+	playing NowPlaying
 }
 
 func (s *Services) ctx() context.Context {
@@ -237,4 +257,19 @@ func (s *Services) failed(action, trackID string, err error) tea.Msg {
 		return NoticeMsg{Text: "The player did not respond in time."}
 	}
 	return NoticeMsg{Text: "Could not " + action + " the track. See the log for details."}
+}
+
+// transportCmd runs f off the UI goroutine with playbackTimeout. A failure
+// is logged and shown as a notice.
+func (s *Services) transportCmd(f func(context.Context) error) tea.Cmd {
+	ctx := s.ctx()
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, playbackTimeout)
+		defer cancel()
+		if err := f(ctx); err != nil {
+			s.logger().Warn("playback control failed", "err", err)
+			return NoticeMsg{Text: "Playback: " + userMessage(err)}
+		}
+		return nil
+	}
 }

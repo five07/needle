@@ -8,10 +8,10 @@
 │             │ q       quit                 │             │
 │             │ ctrl+c  quit (even in input) │             │
 │             │                              │             │
-│             │ Navigation                   │             │
-│             │ k/↑     move up              │             │
-│             │ j/↓     move down            │             │
-│             │ h/←     sidebar or back      │             │
+│             │ Playback                     │             │
+│             │ space   play / pause         │             │
+│             │ n/]     next track           │             │
+│             │ p/[     previous track       │             │
 │             │ ↓ more (j)                   │             │
 │             ╰──────────────────────────────╯             │
 │ j/k scroll · esc close help                              │

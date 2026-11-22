@@ -9,12 +9,12 @@
 │      │ q       quit                    l/→     main pane             │       │
 │      │ ctrl+c  quit (even in input)    g       jump to top           │       │
 │      │                                 G       jump to bottom        │       │
-│      │                                 ctrl+d  half page down        │       │
-│      │                                 ctrl+u  half page up          │       │
-│      │                                 enter   open or play          │       │
-│      │                                 esc     back / leave input    │       │
-│      │                                                               │       │
-│      │                                 Search                        │       │
+│      │ Playback                        ctrl+d  half page down        │       │
+│      │ space   play / pause            ctrl+u  half page up          │       │
+│      │ n/]     next track              enter   open or play          │       │
+│      │ p/[     previous track          esc     back / leave input    │       │
+│      │ s       shuffle on/off                                        │       │
+│      │ r       repeat off/all/one      Search                        │       │
 │      │                                 enter   search (in the input) │       │
 │      ╰───────────────────────────────────────────────────────────────╯       │
 │                                                                              │

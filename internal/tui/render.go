@@ -45,7 +45,7 @@ func (m *Model) render() string {
 			rows = append(rows, leftBorder+side[i]+midBorder+" "+main[i]+" "+rightBorder)
 		}
 		rows = append(rows, b("├"+strings.Repeat("─", l.Sidebar.W)+"┴"+strings.Repeat("─", l.Main.W)+"┤"))
-		for _, line := range barLines(l.Bar.W) {
+		for _, line := range m.barLines(l.Bar.W) {
 			rows = append(rows, b("│")+line+b("│"))
 		}
 		rows = append(rows, b("├"+strings.Repeat("─", w-2)+"┤"))
@@ -89,17 +89,6 @@ func (m *Model) sidebarLines(r Rect) []string {
 		}
 		out[i] = line
 	}
-	return out
-}
-
-// barLines draws the now-playing bar. Until the player is connected
-// (TASK-013) it shows the idle state, at full height (decision 23).
-func barLines(w int) []string {
-	out := make([]string, BarHeight)
-	for i := range out {
-		out[i] = strings.Repeat(" ", w)
-	}
-	out[2] = styleDim.Render(center("Nothing playing", w))
 	return out
 }
 
@@ -163,7 +152,7 @@ func (m *Model) hintLine(w int) string {
 // helpLines draws the help overlay: global, navigation, and the current
 // view's bindings, centered in w x h.
 func (m *Model) helpLines(w, h int) []string {
-	groups := []helpGroup{Keys.globalGroup(), Keys.navGroup()}
+	groups := []helpGroup{Keys.globalGroup(), Keys.playbackGroup(), Keys.navGroup()}
 	if vb := m.current().Bindings(); len(vb) > 0 {
 		groups = append(groups, helpGroup{m.current().Title(), vb})
 	}
@@ -184,8 +173,9 @@ func (m *Model) helpLines(w, h int) []string {
 	innerW := w - 4 // the box border and padding
 	body := render(groups)
 	if lipgloss.Height(body) > inner {
-		// Two columns when they fit across, else one column cut short.
-		if two := lipgloss.JoinHorizontal(lipgloss.Top, render(groups[:1]), "    ", render(groups[1:])); lipgloss.Width(two) <= innerW {
+		// Two columns when they fit across (Global and Playback, then
+		// Navigation and the view), else one column cut short.
+		if two := lipgloss.JoinHorizontal(lipgloss.Top, render(groups[:2]), "    ", render(groups[2:])); lipgloss.Width(two) <= innerW {
 			body = two
 		}
 	}

@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The Queue and Account views and the now-playing bar are being built next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar and the Queue view are in place too; the Account view is next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -54,7 +54,7 @@ After login, tidal-tui prints the account name and opens the terminal UI.
 
 The screen has a sidebar of sections (Search, Library, Discovery, Queue, Account), a main pane for the selected section, a now-playing bar, and a line of key hints. It needs at least 50x16 cells and is laid out for 80x24 and larger. Below 80 columns the sidebar shrinks to a strip of initials. In a smaller terminal it shows "Terminal too small" until the window grows again.
 
-Sections that are not built yet say so in the main pane. Until the now-playing bar is built, the bar shows "Nothing playing"; playing and queueing are confirmed by a short notice in the hint line instead, and playback errors (for example a missing mpv) appear there too.
+Sections that are not built yet say so in the main pane. Playing and queueing are confirmed by a short notice in the hint line, and playback errors (for example a missing mpv) appear there too.
 
 ### Keys
 
@@ -65,7 +65,7 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 | `l` / `→`, `enter` (sidebar) | Focus the main pane |
 | `g` / `G` | Jump to the top / bottom |
 | `ctrl+d` / `ctrl+u` | Half a page down / up |
-| `enter` | Play the selected track, or open the selected album, artist, or playlist |
+| `enter` | Play the selected track, or open the selected album, artist, or playlist. On the track that is playing (or paused), it pauses (or resumes) instead of starting over |
 | `a` | Add the selected track, album, or playlist to the end of the queue |
 | `A` | Play the selected track, album, or playlist next |
 | `tab` / `shift+tab` | Switch to the next / previous tab (Search results, an artist, Library, Discovery) |
@@ -80,8 +80,13 @@ Sections that are not built yet say so in the main pane. Until the now-playing b
 | `?` | Show or hide every key for the current screen (`j`/`k` scroll it when it does not fit) |
 | `q` | Quit |
 | `ctrl+c` | Quit, even while typing |
+| `space` | Pause / resume |
+| `n` / `]` | Next track |
+| `p` / `[` | Previous track (on the first track: start it over) |
+| `s` | Shuffle on / off |
+| `r` | Repeat: off, all, one |
 
-While the search input has focus, letters type into it, so `q`, `j`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
+While the search input has focus, letters and `space` type into it, so `q`, `j`, `space`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
 
 The hint line shows as many keys as fit; `?` lists them all. Tabbed views put their most important keys first so they stay visible on small terminals: `/ search` and `tab` in Search, `tab` in an artist view, `/ filter` and `tab` in the Library, and `tab` in Discovery.
 
@@ -112,9 +117,29 @@ Open a mix to see its tracks; play and queue it like a playlist. `f` and `F` add
 - **`R`** on a track or artist, in any view, opens its radio: a mix of tracks like it, played and queued like any track list. Albums, playlists, and mixes have no radio.
 - **`S`** on a track, artist, or album, in any view, lists similar tracks, artists, or albums, loading more as you scroll. Playlists and mixes have no similar list.
 
+### Now playing
+
+The bar at the bottom shows, centered, top to bottom:
+
+1. The track title, bold. A title too wide for the bar scrolls across it endlessly. (Drawing it at 2x size in terminals that support kitty's text sizing is planned as its own task.)
+2. The artists and the album.
+3. The format: what TIDAL sent, what reaches the sound card, the audio mode, and the bit-perfect indicator, for example `FLAC 24/96 → out 24/96 · exclusive · ✓ bit-perfect`. When the output differs from the source, the indicator turns yellow and says why, for example `⚠ resampled to 48 kHz (source 96 kHz)`. Previews are marked `PREVIEW`.
+4. Elapsed time, a progress bar, and the track length. The progress bar is display only.
+5. The controls: shuffle (`⇄ on`/`off`), previous, play/pause, next, and repeat (`↻ off`/`all`/`one`). Click any of them.
+
+When the queue runs out, the bar keeps the last track and says "Stopped".
+
+### Queue
+
+The Queue section lists the track that is playing, then the tracks still to come, in play order (with shuffle on, the shuffled order). The sidebar shows how many are still to come, for example `Queue (12)`.
+
+- **`enter`** plays the selected track, or pauses and resumes the one that is playing.
+- **`d`** or **`x`** removes the selected upcoming track. The playing track stays; press `n` to skip it.
+- **`D`** clears every upcoming track. It asks first: press `D` again within 2 seconds. The playing track keeps playing.
+
 ### Mouse
 
-Click a sidebar section to switch to it, or a row to select it. Double-click opens or plays. The scroll wheel scrolls the list under the pointer. Clicking anywhere closes the help.
+Click a sidebar section to switch to it, or a row to select it. Double-click opens or plays. The scroll wheel scrolls the list under the pointer. Click the controls in the now-playing bar to use them. Clicking anywhere closes the help.
 
 ## Playback
 

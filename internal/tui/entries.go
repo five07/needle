@@ -159,6 +159,9 @@ func (e *entryList) activate() tea.Cmd {
 	}
 	switch en.kind {
 	case entryTrack:
+		if e.svc.pausable(en.track.ID) { // AC #8, decision 48
+			return e.svc.transportCmd(e.svc.Transport.TogglePause)
+		}
 		var tracks []tidal.Track
 		start := 0
 		for i, other := range e.entries {

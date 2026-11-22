@@ -40,6 +40,13 @@ type KeyMap struct {
 	// Discovery actions (decision 43).
 	Radio   key.Binding
 	Similar key.Binding
+
+	// Playback (TASK-013), in every view outside text inputs.
+	PlayPause key.Binding
+	NextTrack key.Binding
+	PrevTrack key.Binding
+	Shuffle   key.Binding
+	Repeat    key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -73,6 +80,16 @@ var Keys = KeyMap{
 
 	Radio:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "radio")),
 	Similar: key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "similar")),
+
+	PlayPause: key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "play / pause")),
+	NextTrack: key.NewBinding(key.WithKeys("n", "]"), key.WithHelp("n/]", "next track")),
+	PrevTrack: key.NewBinding(key.WithKeys("p", "["), key.WithHelp("p/[", "previous track")),
+	Shuffle:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "shuffle on/off")),
+	Repeat:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "repeat off/all/one")),
+}
+
+func (k KeyMap) playbackGroup() helpGroup {
+	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat}}
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

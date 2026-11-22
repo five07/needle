@@ -1,0 +1,16 @@
+┌ tidal-tui ──────────────────── ? help ─ q quit ┐
+│ S │ Search: artists, albums, tracks, playlists │
+│ L │ ────────────────────────────────────────── │
+│ D │ Type to search. Press / from anywhere to … │
+│ Q │                                            │
+│ A │                                            │
+├───┴────────────────────────────────────────────┤
+│                 One More Time                  │
+│                                                │
+│             Daft Punk · Discovery              │
+│FLAC 24/96 → out 48 · shared · ⚠ resampled to 4…│
+│    1:42 ━━━━━━━━━●──────────────────── 5:20    │
+│        ⇄ off    [⏮]  [▶]  [⏭]    ↻ off         │
+├────────────────────────────────────────────────┤
+│ / search · j/k move · enter open · ? help      │
+└────────────────────────────────────────────────┘

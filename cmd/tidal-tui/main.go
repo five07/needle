@@ -217,11 +217,15 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 		}
 	}()
 	notices := make(chan string, 4)
-	go watchStatus(uiCtx, p, notices)
+	status := make(chan tui.NowPlaying, 1)
+	pb := &playback{q: q, p: p, changed: make(chan struct{}, 1)}
+	go watchStatus(uiCtx, p, watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode})
 
 	model = tui.New(tui.Config{
-		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog, Playback: &playback{q: q, p: p}, Logger: logger},
-		Notices:  notices,
+		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
+			Playback: pb, Transport: pb, Logger: logger},
+		Notices: notices,
+		Status:  status,
 	})
 	return model, func() { cancel(); <-done }, nil
 }
