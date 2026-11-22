@@ -1,11 +1,11 @@
 ---
 id: TASK-022
 title: Rename project to needle
-status: In Progress
+status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T15:06:38Z'
-updated_date: '2026-11-22T18:16:10Z'
+updated_date: '2026-11-22T18:24:13Z'
 labels:
   - chore
   - post-mvp
@@ -66,4 +66,12 @@ Assumptions: Q&A history and done tasks keep tidal-tui; cmd/tidal-spike keeps it
 
 <!-- SECTION:NOTES:BEGIN -->
 T1-T5 implemented. Module github.com/five07/needle; cmd/tidal-tui moved to cmd/needle with mv (git add -A sees the rename); .gitignore /needle; CI builds ./cmd/needle. Runtime names: XDG dirs, needle.log, $XDG_RUNTIME_DIR/needle and needle- temp prefix, keyring service needle (account tidal-account kept), callback page, frame title, window title, error prefixes, mpv audio client name, User-Agent, MPRIS bus name org.mpris.MediaPlayer2.needle, identity, and track paths. 30 goldens regenerated: only the top border title changed. No code reads the old paths or keyring entry. Affiliation line in README and -version (tested). Docs: README, UI.md, PLAN.md intro and DoD; backlog projectName via CLI; the two DoD strings in .backlog/config.yml edited directly (no CLI for the DoD). PLAN.md Q&A history and finished task text keep tidal-tui; cmd/tidal-spike keeps its name. Awaiting user review.
+
+User reviewed and approved; the local folder is now ~/Projects/Go/needle and the rename is committed.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+The project is renamed to needle. The Go module is github.com/five07/needle; the command lives in cmd/needle and builds a needle binary (.gitignore and CI updated). Runtime names use needle: XDG config and state directories, needle.log, $XDG_RUNTIME_DIR/needle and the needle- temp prefix, the keyring service (account key tidal-account kept), the login callback page, the TUI frame and window title, error messages, mpv's audio client name, the User-Agent, and the MPRIS bus name, identity, and track paths. No code reads the old paths or keyring entry (decision 37). The affiliation notice is in the README and printed by -version (decision 39). README, UI.md, the PLAN.md intro and DoD, and the backlog project name and DoD use needle; PLAN.md history and finished tasks keep tidal-tui. Verified: go test -race, vet and gofmt clean; coverage unchanged; 30 goldens changed only in the title. Left to the maintainer: the GitHub repo and remote, the TIDAL app name, and Waybar or omarchy-shell config.
+<!-- SECTION:FINAL_SUMMARY:END -->
