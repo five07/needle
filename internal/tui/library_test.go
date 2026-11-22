@@ -337,7 +337,7 @@ func TestFavoriteKeys(t *testing.T) {
 		{name: "F on a track", key: "F", writes: []string{"remove tracks 1"}, notice: "Removed from favorites: One More Time"},
 		{name: "f on an album", moves: []tea.Msg{tabKey}, key: "f", writes: []string{"add albums 1550545"}, notice: "Added to favorites: Discovery"},
 		{name: "f on an artist", moves: []tea.Msg{tabKey, tabKey}, key: "f", writes: []string{"add artists 8847"}, notice: "Added to favorites: Daft Punk"},
-		{name: "F on a playlist", moves: []tea.Msg{press("G")}, key: "F", writes: []string{"remove playlists pl-1"}, notice: "Removed from favorites: Daft Punk Essentials"},
+		{name: "F on a playlist", moves: []tea.Msg{tabKey, tabKey, tabKey}, key: "F", writes: []string{"remove playlists pl-1"}, notice: "Removed from favorites: Daft Punk Essentials"},
 		{name: "already a favorite", key: "f", setup: func(e *env, _ *libFake) { e.svc.favs().set(tidal.FavTracks, "1", true) },
 			notice: "One More Time is already a favorite."},
 		{name: "write fails", key: "f", setup: func(_ *env, l *libFake) { l.writeErr = tidal.ErrCollectionFull },

@@ -290,7 +290,7 @@ func TestRadioKey(t *testing.T) {
 		{name: "track", title: "Radio: One More Time"},
 		{name: "artist", moves: []tea.Msg{tabKey, tabKey}, title: "Radio: Daft Punk"},
 		{name: "album", moves: []tea.Msg{tabKey}, notice: "Radio is available for tracks and artists."},
-		{name: "playlist", moves: []tea.Msg{press("G")}, notice: "Radio is available for tracks and artists."},
+		{name: "playlist", moves: []tea.Msg{tabKey, tabKey, tabKey}, notice: "Radio is available for tracks and artists."},
 		{name: "no radio", setup: func(_ *env, d *discFake) { delete(d.radios, "track:1") },
 			notice: "TIDAL has no radio for One More Time."},
 		{name: "api error", setup: func(_ *env, d *discFake) { d.errs["radio:track:1"] = tidal.ErrUnauthorized },

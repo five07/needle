@@ -274,6 +274,24 @@ API facts below come from the official OpenAPI spec v1.10.258 and a live probe o
     - b) Other keys (name them).
     > MS: a
 
+### TASK-024 (search sub-tabs)
+
+44. **Which keys lead the Search hint line.** AC #3 asks for the most important Search keys first, including `tab`, like the Library's `/ filter · tab next tab`.
+    - a) **(Recommended)** `/ search · tab next tab` first, then `j/k move · h back` and the item keys. With the sidebar focused on Search, `/ search` also moves to the front, as `/ filter` does for the Library.
+    - b) Only `tab next tab` first; `/ search` stays near the end.
+    > MS: a
+
+45. **`tab` while typing in the search input.** Today the input takes `tab` and does nothing with it, so you must press `esc` before switching tabs.
+    - a) **(Recommended)** `tab` and `shift+tab` in the input leave it and switch to the next / previous tab, so you can type a query and go straight to Albums.
+    - b) `tab` in the input only leaves it (like `esc`); a second `tab` switches.
+    - c) Unchanged: `esc` first.
+    > MS: a
+
+46. **The artist view.** It still shows Top tracks and Albums as one grouped list with headings (TASK-010).
+    - a) **(Recommended)** Leave it in this task; add a backlog task to move it to sub-tabs too.
+    - b) Move it to sub-tabs in this task.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -355,6 +373,9 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 41 | Mix reload | Load when Discovery is first shown, and again on a visit more than an hour later. No refresh key. |
 | 42 | Favorites on mixes | `f`/`F` work on mix rows like any playlist (the user confirmed TIDAL accepts mixes as favorites). |
 | 43 | Radio and Similar keys | `R` radio on tracks and artists, `S` similar on tracks, artists, and albums, in every view; other rows get a notice saying what is supported. |
+| 44 | Search hint lead | `/ search · tab next tab` lead the Search hint line; with the sidebar focused on Search, `/ search` comes first. |
+| 45 | `tab` in the search input | `tab`/`shift+tab` leave the input and switch to the next / previous tab. |
+| 46 | Artist view | Stays a grouped list in TASK-024; its own backlog task moves it to sub-tabs. |
 | 37 | Rename migration | None. Run `tidal-tui -logout` before switching and move `config.toml` by hand; the README says nothing about it. |
 | 38 | Rename timing | After v1 is feature-complete, as its own ticket. Until then the code, paths, and docs keep `tidal-tui`. |
 | 39 | Affiliation notice | One README line under the intro, "needle is an independent project and is not affiliated with or endorsed by TIDAL.", also printed by `-version`. |

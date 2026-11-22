@@ -31,7 +31,15 @@ type resultsMsg struct {
 	err     error
 }
 
-// SearchView is the Search section: a query input over grouped results.
+// resultTab is one kind of search result: Tracks, Albums, Artists, or
+// Playlists.
+type resultTab struct {
+	title string
+	list  entryList
+}
+
+// SearchView is the Search section: a query input over results in
+// sub-tabs, one per kind (decision 40).
 // Typing searches after a pause (SearchDebounce); enter searches at once.
 // Only the newest request's response is shown.
 type SearchView struct {
@@ -44,7 +52,8 @@ type SearchView struct {
 	query   string // the query being searched or shown
 	state   searchState
 	errText string
-	results entryList
+	tabs    []*resultTab // kinds with results, in order
+	active  int
 }
 
 // NewSearchView returns the Search section view. With nil services the
@@ -54,7 +63,7 @@ func NewSearchView(svc *Services) *SearchView {
 	in.Prompt = "Search: "
 	in.Placeholder = "artists, albums, tracks, playlists"
 	in.CharLimit = tidal.MaxQueryLen
-	return &SearchView{input: in, svc: svc, results: newEntryList(svc)}
+	return &SearchView{input: in, svc: svc}
 }
 
 // Query returns the current input text.
@@ -66,8 +75,12 @@ func (s *SearchView) Title() string { return "Search" }
 // Render implements View.
 func (s *SearchView) Render(width, height int, focused bool) string {
 	s.input.SetWidth(max(1, width-len(s.input.Prompt)-1))
-	lines := []string{fit(s.input.View(), width), styleBorder.Render(strings.Repeat("─", width))}
-	bodyH := max(0, height-2)
+	lines := []string{fit(s.input.View(), width)}
+	if len(s.tabs) > 0 {
+		lines = append(lines, tabBar(s.titles(), s.active, width, ""))
+	}
+	lines = append(lines, styleBorder.Render(strings.Repeat("─", width)))
+	bodyH := max(0, height-len(lines))
 	if bodyH == 0 {
 		return strings.Join(lines[:min(len(lines), height)], "\n")
 	}
@@ -77,8 +90,8 @@ func (s *SearchView) Render(width, height int, focused bool) string {
 		body = styleDim.Render(fit("Search is not available.", width))
 	case s.state == searchFailed:
 		body = styleDim.Render(fit("Search failed: "+s.errText, width))
-	case len(s.results.entries) > 0:
-		body = s.results.render(width, bodyH, focused && !s.input.Focused())
+	case len(s.tabs) > 0:
+		body = s.tab().list.render(width, bodyH, focused && !s.input.Focused())
 	case s.state == searchLoading:
 		body = styleDim.Render(fit("Searching…", width))
 	case s.state == searchDone:
@@ -105,20 +118,31 @@ func (s *SearchView) Update(msg tea.Msg) tea.Cmd {
 		if s.input.Focused() {
 			return s.onInputKey(msg)
 		}
-		cmd, _ := s.results.update(msg)
-		return cmd
+		return s.onResultKey(msg)
 	case ClickMsg:
 		if msg.Y == 0 {
 			return s.input.Focus()
 		}
 		s.input.Blur()
-		if msg.Y >= 2 {
-			msg.Y -= 2
-			cmd, _ := s.results.update(msg)
+		if len(s.tabs) == 0 {
+			return nil
+		}
+		if msg.Y == 1 {
+			if i := tabAt(s.titles(), msg.X); i >= 0 {
+				s.active = i
+			}
+			return nil
+		}
+		if msg.Y >= 3 {
+			msg.Y -= 3
+			cmd, _ := s.tab().list.update(msg)
 			return cmd
 		}
 	case WheelMsg:
-		cmd, _ := s.results.update(msg)
+		if len(s.tabs) == 0 {
+			return nil
+		}
+		cmd, _ := s.tab().list.update(msg)
 		return cmd
 	default:
 		var cmd tea.Cmd
@@ -138,6 +162,10 @@ func (s *SearchView) onInputKey(k tea.KeyPressMsg) tea.Cmd {
 		s.input.Blur()
 		s.typed++ // a pending debounce is no longer needed
 		return s.start()
+	case "tab", "shift+tab":
+		// Decision 45: leave the input and switch tabs in one key.
+		s.input.Blur()
+		return s.onResultKey(k)
 	}
 	before := s.input.Value()
 	var cmd tea.Cmd
@@ -156,7 +184,7 @@ func (s *SearchView) edited() tea.Cmd {
 	case q == "":
 		s.stop()
 		s.query, s.state, s.errText = "", searchIdle, ""
-		s.results.set(nil)
+		s.tabs = nil
 		return nil
 	case q == s.query && s.state != searchFailed:
 		return nil // back to what is already shown or loading
@@ -206,52 +234,103 @@ func (s *SearchView) receive(m resultsMsg) tea.Cmd {
 		}
 		s.svc.logger().Warn("search failed", "query_len", len(s.query), "err", m.err)
 		s.state, s.errText = searchFailed, userMessage(m.err)
-		s.results.set(nil)
+		s.tabs = nil
 		return nil
 	}
 	s.state = searchDone
-	s.results.set(groupResults(m.results))
+	s.tabs, s.active = resultTabs(s.svc, m.results), 0 // AC #2: the first tab with results
 	return nil
 }
 
-// groupResults lays out the results as Tracks, Albums, Artists, then
-// Playlists, leaving out empty groups.
-func groupResults(r tidal.SearchResults) []entry {
-	var es []entry
-	if len(r.Tracks) > 0 {
-		es = append(es, headingEntry("Tracks", 0))
-		es = append(es, trackEntries(r.Tracks, 0)...)
+// onResultKey handles keys outside the input: tab switching, then the
+// item keys of the active tab.
+func (s *SearchView) onResultKey(k tea.KeyPressMsg) tea.Cmd {
+	if len(s.tabs) == 0 {
+		return nil
 	}
-	if len(r.Albums) > 0 {
-		es = append(es, headingEntry("Albums", 1))
-		es = append(es, albumEntries(r.Albums, 1)...)
+	switch {
+	case key.Matches(k, Keys.NextGroup):
+		s.active = (s.active + 1) % len(s.tabs)
+		return nil
+	case key.Matches(k, Keys.PrevGroup):
+		s.active = (s.active - 1 + len(s.tabs)) % len(s.tabs)
+		return nil
 	}
-	if len(r.Artists) > 0 {
-		es = append(es, headingEntry("Artists", 2))
-		for _, a := range r.Artists {
-			es = append(es, entry{kind: entryArtist, artist: a, group: 2})
+	cmd, _ := s.tab().list.update(k)
+	return cmd
+}
+
+func (s *SearchView) tab() *resultTab { return s.tabs[s.active] }
+
+func (s *SearchView) titles() []string {
+	out := make([]string, len(s.tabs))
+	for i, t := range s.tabs {
+		out[i] = t.title
+	}
+	return out
+}
+
+// resultTabs makes a tab for each kind with results, in the order Tracks,
+// Albums, Artists, Playlists.
+func resultTabs(svc *Services, r tidal.SearchResults) []*resultTab {
+	kinds := []struct {
+		title string
+		es    []entry
+	}{
+		{"Tracks", trackEntries(r.Tracks, 0)},
+		{"Albums", albumEntries(r.Albums, 0)},
+		{"Artists", artistEntries(r.Artists, 0)},
+		{"Playlists", playlistEntries(r.Playlists)},
+	}
+	var tabs []*resultTab
+	for _, k := range kinds {
+		if len(k.es) == 0 {
+			continue
 		}
+		t := &resultTab{title: k.title, list: newEntryList(svc)}
+		t.list.set(k.es)
+		tabs = append(tabs, t)
 	}
-	if len(r.Playlists) > 0 {
-		es = append(es, headingEntry("Playlists", 3))
-		for _, p := range r.Playlists {
-			es = append(es, entry{kind: entryPlaylist, playlist: p, group: 3})
-		}
+	return tabs
+}
+
+func playlistEntries(ps []tidal.Playlist) []entry {
+	out := make([]entry, len(ps))
+	for i, p := range ps {
+		out[i] = entry{kind: entryPlaylist, playlist: p}
 	}
-	return es
+	return out
 }
 
 // Bindings implements View.
 func (s *SearchView) Bindings() []key.Binding {
-	if s.input.Focused() || len(s.results.entries) == 0 {
+	if s.input.Focused() || len(s.tabs) == 0 {
 		return []key.Binding{key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "search (in the input)"))}
 	}
-	return s.results.bindings(true)
+	bs := []key.Binding{ // the first searchLeadHints lead the hint line (decision 44)
+		key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
+		key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next tab")),
+	}
+	bs = append(bs, s.tab().list.bindings(false)...)
+	return append(bs, key.NewBinding(key.WithKeys("shift+tab"), key.WithHelp("shift+tab", "previous tab")))
+}
+
+const searchLeadHints = 2
+
+// LeadHints implements HintLeader: search and tab switching come first,
+// once there are results. (While typing, the shell shows input hints.)
+func (s *SearchView) LeadHints() int {
+	if len(s.tabs) == 0 {
+		return 0
+	}
+	return searchLeadHints
 }
 
 // FavoriteChanged implements favoriteWatcher.
 func (s *SearchView) FavoriteChanged(FavoriteMsg) tea.Cmd {
-	s.results.favoritesChanged()
+	for _, t := range s.tabs {
+		t.list.favoritesChanged()
+	}
 	return nil
 }
 

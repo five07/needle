@@ -122,8 +122,11 @@ func (m *Model) hintLine(w int) string {
 		}
 	case m.focus == paneSidebar:
 		hints = []key.Binding{hint("j/k", "move"), hint("enter", "open"), hint("/", "search"), hint("?", "help"), hint("q", "quit")}
-		if _, ok := m.current().(Filterer); ok { // the filter matters most: first
+		switch m.current().(type) {
+		case Filterer: // the filter matters most: first
 			hints = []key.Binding{hint("/", "filter"), hint("j/k", "move"), hint("enter", "open"), hint("?", "help"), hint("q", "quit")}
+		case *SearchView: // decision 44
+			hints = []key.Binding{hint("/", "search"), hint("j/k", "move"), hint("enter", "open"), hint("?", "help"), hint("q", "quit")}
 		}
 	default:
 		vb := m.current().Bindings()
@@ -134,7 +137,7 @@ func (m *Model) hintLine(w int) string {
 		hints = append(hints, vb[:lead]...)
 		hints = append(hints, hint("j/k", "move"), hint("h", "back"))
 		hints = append(hints, vb[lead:]...)
-		if _, ok := m.current().(Filterer); !ok { // a Filterer lists "/ filter" itself
+		if !hasKey(vb, "/") { // a view may list "/" itself (filter, or search first)
 			hints = append(hints, hint("/", "search"))
 		}
 		hints = append(hints, hint("?", "help"), hint("q", "quit"))
@@ -223,3 +226,13 @@ func placeMiddle(s string, w, h int) string {
 
 // hint is a display-only binding for the hint line.
 func hint(k, desc string) key.Binding { return key.NewBinding(key.WithHelp(k, desc)) }
+
+// hasKey reports whether one of bs is shown as key k.
+func hasKey(bs []key.Binding, k string) bool {
+	for _, b := range bs {
+		if b.Help().Key == k {
+			return true
+		}
+	}
+	return false
+}

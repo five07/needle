@@ -283,8 +283,8 @@ func TestSearchDebounce(t *testing.T) {
 	if e.cat.count("search") != 1 || e.cat.queries[0] != "daf" {
 		t.Fatalf("searches = %v", e.cat.queries)
 	}
-	if s := searchView(m); s.state != searchDone || len(s.results.entries) != 11 {
-		t.Errorf("state %d entries %d", s.state, len(s.results.entries))
+	if s := searchView(m); s.state != searchDone || len(allResults(s)) != 7 {
+		t.Errorf("state %d entries %d", s.state, len(allResults(s)))
 	}
 	if len(e.play.got()) != 0 {
 		t.Error("search touched playback")
@@ -325,7 +325,7 @@ func TestSearchStaleResponsesAreDropped(t *testing.T) {
 			s.Update(msg.(ForViewMsg).Msg)
 		}
 	}
-	if got := s.results.entries[1].artist.Name; got != "result for ab" {
+	if got := s.tab().list.entries[0].artist.Name; got != "result for ab" {
 		t.Errorf("shown %q, want the newer results", got)
 	}
 	if e.cat.searchCtx[0].Err() == nil {
@@ -357,8 +357,8 @@ func TestSearchEditing(t *testing.T) {
 	drive(m, press("backspace"), press("backspace"), press("backspace"))
 	e.fire(m)
 	s := searchView(m)
-	if s.state != searchIdle || len(s.results.entries) != 0 || e.cat.count("search") != 1 {
-		t.Errorf("cleared: state %d entries %d", s.state, len(s.results.entries))
+	if s.state != searchIdle || len(allResults(s)) != 0 || e.cat.count("search") != 1 {
+		t.Errorf("cleared: state %d entries %d", s.state, len(allResults(s)))
 	}
 	if !strings.Contains(ansi.Strip(m.render()), "Type to search") {
 		t.Error("idle hint missing")
@@ -474,29 +474,40 @@ func TestSearchGoldenScreens(t *testing.T) {
 	}
 }
 
+// allResults returns the entries of every Search tab.
+func allResults(s *SearchView) []entry {
+	var out []entry
+	for _, t := range s.tabs {
+		out = append(out, t.list.entries...)
+	}
+	return out
+}
+
 func TestResultNavigation(t *testing.T) {
 	_, m := searched(t, 80, 40)
 	s := searchView(m)
-	at := func() entry { en, _ := s.results.selected(); return en }
-	if at().track.ID != "1" {
-		t.Fatalf("first selection = %+v", at())
+	at := func() entry { en, _ := s.tab().list.selected(); return en }
+	if got := s.titles(); strings.Join(got, " ") != "Tracks Albums Artists Playlists" || at().track.ID != "1" {
+		t.Fatalf("tabs %q, first selection %+v", got, at())
 	}
 	steps := []struct {
 		key  string
 		want string // what is selected after the key
 	}{
-		{"k", "track 1"}, // stays: the row above is a heading
+		{"k", "track 1"},
 		{"j", "track 2"},
 		{"j", "track 3"},
-		{"j", "album 1550545"}, // skips the Albums heading
-		{"k", "track 3"},
+		{"j", "track 3"}, // the end of the Tracks tab
 		{"tab", "album 1550545"},
 		{"tab", "artist 8847"},
 		{"tab", "playlist pl-1"},
-		{"tab", "track 1"}, // wraps
+		{"tab", "track 3"}, // wraps; each tab keeps its cursor
 		{"shift+tab", "playlist pl-1"},
+		{"shift+tab", "artist 8847"},
+		{"tab", "playlist pl-1"},
+		{"tab", "track 3"},
 		{"g", "track 1"},
-		{"G", "playlist pl-1"},
+		{"G", "track 3"},
 	}
 	for _, st := range steps {
 		k := press(st.key)
@@ -511,27 +522,38 @@ func TestResultNavigation(t *testing.T) {
 			t.Fatalf("after %s: selected %s, want %s", st.key, got, st.want)
 		}
 	}
-	// Clicking a heading changes nothing; clicking an item selects it.
+	// A click on a tab name selects the tab; the separator does nothing; a
+	// click on a row selects it.
 	main := m.layout.Main
-	drive(m, tea.MouseClickMsg{X: main.X + 2, Y: main.Y + 2, Button: tea.MouseLeft}) // TRACKS heading
-	if describe(at()) != "playlist pl-1" {
-		t.Errorf("heading click selected %s", describe(at()))
+	drive(m, tea.MouseClickMsg{X: main.X + 1 + 10, Y: main.Y + 1, Button: tea.MouseLeft}) // " Albums "
+	if describe(at()) != "album 1550545" {
+		t.Fatalf("tab click selected %s", describe(at()))
 	}
+	drive(m, tea.MouseClickMsg{X: main.X + 1 + 60, Y: main.Y + 1, Button: tea.MouseLeft})
+	drive(m, tea.MouseClickMsg{X: main.X + 2, Y: main.Y + 2, Button: tea.MouseLeft})
+	if describe(at()) != "album 1550545" {
+		t.Errorf("click beside the tabs or on the separator selected %s", describe(at()))
+	}
+	drive(m, tea.MouseClickMsg{X: main.X + 1 + 2, Y: main.Y + 1, Button: tea.MouseLeft}) // " Tracks "
 	drive(m, tea.MouseClickMsg{X: main.X + 2, Y: main.Y + 4, Button: tea.MouseLeft})
 	if describe(at()) != "track 2" {
-		t.Errorf("click selected %s", describe(at()))
+		t.Errorf("row click selected %s", describe(at()))
 	}
 	drive(m, tea.MouseWheelMsg{X: main.X + 2, Y: main.Y + 4, Button: tea.MouseWheelDown})
-	if _, ok := s.results.selected(); !ok {
-		t.Error("wheel left the cursor on a heading")
-	}
-	// Bindings list the item keys once there are results.
+	// Bindings list search and tab first, then the item keys.
 	var keys []string
 	for _, b := range s.Bindings() {
 		keys = append(keys, b.Help().Key)
 	}
-	if strings.Join(keys, " ") != "enter a A f F + tab shift+tab" {
+	if strings.Join(keys, " ") != "/ tab enter a A f F + shift+tab" || s.LeadHints() != searchLeadHints {
 		t.Errorf("bindings = %v", keys)
+	}
+	if hints := ansi.Strip(m.hintLine(300)); !strings.HasPrefix(hints, " / search · tab next tab · j/k move · h back · enter") ||
+		strings.Count(hints, "/ search") != 1 {
+		t.Errorf("hints = %q", hints)
+	}
+	if hints := ansi.Strip(m.hintLine(30)); !strings.HasPrefix(hints, " / search · tab next tab") {
+		t.Errorf("narrow hints = %q", hints)
 	}
 }
 
@@ -582,14 +604,14 @@ func TestResultActions(t *testing.T) {
 			want: []playCall{{op: "next", ids: []string{"1"}, hasCtx: true}}, notice: "Playing next: One More Time"},
 		{name: "enter opens an album", moves: []string{"tab"}, key: "enter", pushed: "*tui.TrackListView"},
 		{name: "enter opens an artist", moves: []string{"tab", "tab"}, key: "enter", pushed: "*tui.ArtistView"},
-		{name: "enter opens a playlist", moves: []string{"G"}, key: "enter", pushed: "*tui.TrackListView"},
+		{name: "enter opens a playlist", moves: []string{"tab", "tab", "tab"}, key: "enter", pushed: "*tui.TrackListView"},
 		{name: "a queues every album page", moves: []string{"tab"}, key: "a",
 			setup: func(e *env) {
 				e.cat.pages["album:1550545"] = []tidal.Page[tidal.Track]{{Items: []tidal.Track{tOneMore, tHarder}, Next: "p1"}, {Items: []tidal.Track{tLucky}}}
 			},
 			want:   []playCall{{op: "add", ids: []string{"1", "2", "3"}, hasCtx: true}},
 			notice: "Added to queue: 3 tracks from Discovery", pageCalls: 2},
-		{name: "A queues a playlist next, capped", moves: []string{"G"}, key: "A",
+		{name: "A queues a playlist next, capped", moves: []string{"tab", "tab", "tab"}, key: "A",
 			setup:  func(e *env) { e.cat.pages["playlist:pl-1"] = pages },
 			want:   []playCall{{op: "next", ids: ids(many[:MaxQueueTracks]), hasCtx: true}},
 			notice: "Playing next: 500 tracks from Daft Punk Essentials (first 500)", pageCalls: 5},
@@ -887,7 +909,7 @@ func TestResultsRouteToTheirView(t *testing.T) {
 	drive(m, press("esc"), press("h"), press("2"))
 	msgs := run(cmd)
 	drive(m, msgs...)
-	if s := searchView(m); s.state != searchDone || len(s.results.entries) == 0 {
+	if s := searchView(m); s.state != searchDone || len(allResults(s)) == 0 {
 		t.Errorf("results lost after switching sections: state %d", s.state)
 	}
 	if m.section != SectionLibrary {
@@ -1043,5 +1065,84 @@ func TestFailedPageIsNotRetried(t *testing.T) {
 	}
 	if cmd := v.Update(press("j")); cmd != nil {
 		t.Error("a key press requested the failed page again")
+	}
+}
+
+// Decision 45: tab and shift+tab in the input leave it and switch tabs.
+func TestTabFromSearchInput(t *testing.T) {
+	tests := []struct {
+		key  tea.KeyPressMsg
+		want string
+	}{
+		{tea.KeyPressMsg{Code: tea.KeyTab}, "Albums"},
+		{tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}, "Playlists"},
+	}
+	for _, tt := range tests {
+		_, m := searched(t, 80, 24)
+		s := searchView(m)
+		drive(m, press("/")) // back into the input, results still shown
+		if !s.Capturing() {
+			t.Fatal("input not focused")
+		}
+		drive(m, tt.key)
+		if s.Capturing() || s.tab().title != tt.want {
+			t.Errorf("%s: capturing %v tab %s, want %s", tt.key, s.Capturing(), s.tab().title, tt.want)
+		}
+		if s.Query() != "daft punk" {
+			t.Errorf("tab edited the query: %q", s.Query())
+		}
+	}
+	// With no results yet, tab only leaves the input.
+	e := newEnv(t)
+	m := e.model(80, 24)
+	drive(m, press("/"), tea.KeyPressMsg{Code: tea.KeyTab})
+	if s := searchView(m); s.Capturing() || len(s.tabs) != 0 {
+		t.Error("tab with no results")
+	}
+	// A new search selects the first tab with results again (AC #2).
+	_, m = searched(t, 80, 24)
+	s := searchView(m)
+	drive(m, tea.KeyPressMsg{Code: tea.KeyTab}, tea.KeyPressMsg{Code: tea.KeyTab})
+	drive(m, press("/"))
+	s.input.SetValue("daft")
+	drive(m, press("enter"))
+	if s.tab().title != "Tracks" {
+		t.Errorf("after a new search the tab is %s", s.tab().title)
+	}
+	// Clicks and the wheel with no results do nothing.
+	empty := NewSearchView(e.svc)
+	if empty.Update(ClickMsg{Y: 3}) != nil || empty.Update(WheelMsg{Delta: 1}) != nil {
+		t.Error("input on an empty Search")
+	}
+}
+
+// Results with only some kinds get only those tabs, the first selected.
+func TestSearchTabsLeaveOutEmptyKinds(t *testing.T) {
+	e := newEnv(t)
+	e.cat.search = func(string) (tidal.SearchResults, error) {
+		return tidal.SearchResults{Artists: []tidal.Artist{arDaft}, Playlists: []tidal.Playlist{pEss}}, nil
+	}
+	m := e.model(80, 24)
+	drive(m, press("/"))
+	searchView(m).input.SetValue("daft")
+	drive(m, press("enter"))
+	s := searchView(m)
+	if got := strings.Join(s.titles(), " "); got != "Artists Playlists" || s.tab().title != "Artists" {
+		t.Errorf("tabs %q, active %s", got, s.tab().title)
+	}
+}
+
+func TestSearchViewSmallStates(t *testing.T) {
+	e := newEnv(t)
+	s := NewSearchView(e.svc)
+	s.state = searchLoading
+	if !strings.Contains(ansi.Strip(s.Render(60, 6, true)), "Searching…") {
+		t.Error("loading state")
+	}
+	s.Update(struct{}{}) // other messages go to the input (cursor blink)
+	s.input.Focus()
+	s.input.SetValue("abc")
+	if s.Update(tea.KeyPressMsg{Code: tea.KeyLeft}); s.typed != 0 {
+		t.Error("a cursor key counted as an edit")
 	}
 }

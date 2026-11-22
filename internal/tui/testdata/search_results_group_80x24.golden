@@ -1,17 +1,17 @@
 ┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
 │ ▸ Search      │ Search: daft punk                                            │
-│   Library     │ ──────────────────────────────────────────────────────────── │
-│   Discovery   │ TRACKS                                                       │
-│   Queue       │   One More Time         Daft Punk      Discovery        5:20 │
-│   Account     │   Harder, Better, Fas…  Daft Punk      Discovery        3:44 │
-│               │   Get Lucky (feat. Ph…  Daft Punk, P…  Random Acc…      6:09 │
-│               │ ALBUMS                                                       │
-│               │   Discovery                 Daft Punk         2001           │
-│               │   Random Access Memories    Daft Punk         2013           │
-│               │ ARTISTS                                                      │
-│               │   Daft Punk                                                  │
-│               │ PLAYLISTS                                                    │
-│               │   Daft Punk Essentials      TIDAL             40 tracks      │
+│   Library     │  Tracks   Albums   Artists   Playlists                       │
+│   Discovery   │ ──────────────────────────────────────────────────────────── │
+│   Queue       │   Discovery                 Daft Punk         2001           │
+│   Account     │   Random Access Memories    Daft Punk         2013           │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
 ├───────────────┴──────────────────────────────────────────────────────────────┤
 │                                                                              │
 │                                                                              │
@@ -20,5 +20,5 @@
 │                                                                              │
 │                                                                              │
 ├──────────────────────────────────────────────────────────────────────────────┤
-│ j/k move · h back · enter play/open · a add to queue · A play next           │
+│ / search · tab next tab · j/k move · h back · enter play/open                │
 └──────────────────────────────────────────────────────────────────────────────┘
