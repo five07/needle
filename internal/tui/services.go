@@ -97,6 +97,10 @@ type Services struct {
 	Discovery Discovery
 	Playback  Playback
 	Transport Transport
+	// Visualizer, when set, is switched by v and the Settings section.
+	Visualizer Visualizer
+	// Settings, when set, makes the Settings rows editable and saved.
+	Settings SettingsService
 	// Logger receives failures in full; the UI shows short messages.
 	Logger *slog.Logger
 	// Tick schedules fn after d. Default tea.Tick (tests replace it).
@@ -110,6 +114,10 @@ type Services struct {
 	// playing is the latest player snapshot. Only the UI goroutine
 	// touches it.
 	playing NowPlaying
+	// theme and custom are the visualizer theme for this session, set by
+	// the Settings view. Only the UI goroutine touches them.
+	theme  string
+	custom []string
 }
 
 func (s *Services) ctx() context.Context {

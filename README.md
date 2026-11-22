@@ -8,7 +8,7 @@ needle is an independent project and is not affiliated with or endorsed by TIDAL
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view (kept across restarts), the Account view, and desktop media controls (MPRIS) are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view (kept across restarts), the Account and Settings views, the spectrum visualizer, and desktop media controls (MPRIS) are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -54,7 +54,7 @@ After login, needle prints the account name and opens the terminal UI.
 
 ## Using the terminal UI
 
-The screen has a sidebar of sections (Search, Library, Discovery, Queue, Account), a main pane for the selected section, a now-playing bar, and a line of key hints. It needs at least 50x16 cells and is laid out for 80x24 and larger. Below 80 columns the sidebar shrinks to a strip of initials. In a smaller terminal it shows "Terminal too small" until the window grows again.
+The screen has a sidebar of sections (Search, Library, Discovery, Queue, Account, Settings), a main pane for the selected section, a now-playing bar, and a line of key hints. It needs at least 50x16 cells and is laid out for 80x24 and larger. Below 80 columns the sidebar shrinks to a strip of initials (`≡` for Settings). When the terminal is too short for all six sections, the sidebar scrolls to keep the current one in view. In a smaller terminal it shows "Terminal too small" until the window grows again.
 
 Sections that are not built yet say so in the main pane. Playing and queueing are confirmed by a short notice in the hint line, and playback errors (for example a missing mpv) appear there too.
 
@@ -78,7 +78,7 @@ Sections that are not built yet say so in the main pane. Playing and queueing ar
 | `o` | Change the sort order of the current Library tab |
 | `esc`, `backspace` | Go back, leave the search input, or clear the Library filter |
 | `/` | Go to Search and type a query (in Library: filter the current tab) |
-| `1` to `5` | Jump to a sidebar section |
+| `1` to `6` | Jump to a sidebar section |
 | `?` | Show or hide every key for the current screen (`j`/`k` scroll it when it does not fit) |
 | `q` | Quit |
 | `ctrl+c` | Quit, even while typing |
@@ -88,6 +88,7 @@ Sections that are not built yet say so in the main pane. Playing and queueing ar
 | `s` | Shuffle on / off |
 | `r` | Repeat: off, all, one |
 | `c` | Autoplay radio: on, off |
+| `v` | Visualizer: on, off |
 
 While the search input has focus, letters and `space` type into it, so `q`, `j`, `space`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
 
@@ -130,6 +131,10 @@ The bar at the bottom shows, centered, top to bottom:
 4. Elapsed time, a progress bar, and the track length. The progress bar is display only.
 5. The controls: shuffle (`⇄ on`/`off`), previous, play/pause, next, repeat (`↻ off`/`all`/`one`), and autoplay (`∞ on`/`off`). Click any of them.
 
+With the visualizer on (`v`), a spectrum of the music fills the bar's background: 32 frequency bands from 40 Hz to 10 kHz, lows on the left, drawn in the free cells around the text so no text is covered. Each bar is shaded in 4 steps, darker at the bottom and brighter at the top, in the theme chosen in Settings.
+
+The visualizer never touches the audio you hear, so the bit-perfect indicator does not change when it is on. needle gets the music for it from a second, silent mpv that decodes the same track at a low sample rate and sends the samples to needle instead of a sound card. This means each track is downloaded a second time while the visualizer is on (about as much data again as the track itself), and it uses a little CPU. With the visualizer off, nothing extra runs. If the second decode cannot start, the bars stay empty, the reason is logged, and playback carries on.
+
 When the queue runs out, the bar keeps the last track and says "Stopped", unless autoplay continues it.
 
 ### Queue
@@ -142,7 +147,7 @@ The Queue section lists the track that is playing, then the tracks still to come
 
 The queue is kept across restarts in `$XDG_STATE_HOME/needle/queue.json` (mode `0600`): the tracks already played, the current track, the ones still to come (in their shuffled order, if shuffle is on), and the shuffle and repeat settings. It is saved after every change to it, not while a track plays, so it survives a crash too; the position within a track is not kept. When there is a saved queue, needle opens on the Queue view with the current track selected and waits: press `space`, `enter`, or the play button to start it. A damaged saved queue, or one over 10,000 tracks, is ignored (and logged), and a queue longer than that is not saved.
 
-**Autoplay** continues with related music when the queue runs out. Turn it on with `c`, a click on `∞` in the bar, or `autoplay = true` in `config.toml` (the value at startup; `c` changes it for the session only). With autoplay on and repeat off, when the last track starts needle fetches TIDAL's track radio for it and adds its first page (about 20 tracks) to the end of the queue, leaving out tracks already queued, so the next track plays gaplessly. When those run out, it does the same from the new last track, so the music drifts. Pressing next on the last track continues too.
+**Autoplay** continues with related music when the queue runs out. Turn it on with `c`, a click on `∞` in the bar, or the Autoplay row in Settings, which also saves it (`c` changes it for the session only). With autoplay on and repeat off, when the last track starts needle fetches TIDAL's track radio for it and adds its first page (about 20 tracks) to the end of the queue, leaving out tracks already queued, so the next track plays gaplessly. When those run out, it does the same from the new last track, so the music drifts. Pressing next on the last track continues too.
 
 - Autoplayed tracks start with `∞` in the Queue view, and the hint line shows `∞ autoplay`.
 - Tracks you add with `a` go ahead of the autoplayed ones; `A` (play next) still puts them right after the current track.
@@ -152,7 +157,24 @@ The queue is kept across restarts in `$XDG_STATE_HOME/needle/queue.json` (mode `
 
 ### Account
 
-The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/needle/best_quality.json`. Below that are your `quality`, audio mode, audio device, and autoplay settings, read-only; change them in `config.toml` and restart. The autoplay line is the value at startup; `c` changes it for the session.
+The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/needle/best_quality.json`. Settings are in their own section.
+
+### Settings
+
+The Settings section holds every setting that is not about your TIDAL account. Select a row and press `enter` (or double-click it) to change it:
+
+- **Visualizer**: on or off.
+- **Visualizer theme**: cycles through `terminal` (the terminal's own blues, so it follows your terminal theme), `burnt orange`, `ice blue`, `forest green`, `royal purple`, `deep red`, and `custom` (offered only when `visualizer.custom` is set in `config.toml`; the colors themselves are edited there).
+- **Quality**: cycles through `aac`, `lossless`, and `hires`. The track playing keeps its quality; the new one applies from the next track, and a notice says so.
+- **Audio mode**: switches between `shared` and `exclusive`. Exclusive mode needs a sound card, so switching to it opens the device list first, and nothing changes unless you pick one (`esc` cancels). Switching back to shared sets the device to `auto`.
+- **Device**: opens the list of devices for the current mode, the same ones `needle -list-devices` shows, with the current one marked. In shared mode `auto` (the system default) comes first.
+- **Autoplay**: on or off.
+
+Changes apply at once, except the audio mode and device, which apply after a second without further changes, so cycling through choices does not restart playback each time. Then needle stops the audio engine and starts it again with the new output, resuming the current track where it was (paused stays paused). Expect a short gap; if the new device is busy or missing, the bar shows the usual playback error.
+
+Every change is also saved to `config.toml` once the changes settle (and at quit). Only the changed lines are rewritten, so your comments and layout stay as they are; a key that is missing is added under its table. If the file writes a setting as a dotted key (`audio.mode = "shared"` at the top level) or an inline table (`audio = { mode = "shared" }`), needle cannot update it in place: the change applies for the session and a notice asks you to edit the file by hand. If saving fails for another reason, a notice says so, the reason is logged, and the change still applies for the session.
+
+`v` and `c` stay quick toggles for the session and are not saved. When the session differs from the saved setting, the row shows both, for example `off (now on)`.
 
 ### Mouse
 
@@ -253,13 +275,23 @@ mode = "shared"
 # or "pipewire/<sink>". Exclusive mode: "alsa/hw:CARD=<name>,DEV=<n>".
 device = "auto"
 
+[visualizer]
+# Start with the spectrum visualizer on (toggle with v). It downloads each
+# track a second time while on; see "Now playing".
+enabled = false
+# "terminal", "burnt orange", "ice blue", "forest green", "royal purple",
+# "deep red", or "custom".
+theme = "terminal"
+# For theme = "custom": 4 colors "#rrggbb", bottom (darkest) to top.
+# custom = ["#202020", "#505050", "#a0a0a0", "#ffffff"]
+
 [auth]
 # TIDAL developer app client ID. Overrides TIDAL_CLIENT_ID and the
 # build-time default. Letters, digits, ".", "_" and "-" only.
 # client_id = ""
 ```
 
-Unknown keys and invalid values stop startup with an error that names the key.
+Unknown keys and invalid values stop startup with an error that names the key. The Settings section saves its changes here too (see Settings), keeping your comments; it never writes `auth` or `visualizer.custom`.
 
 The client ID is chosen in this order: `auth.client_id` in the config file, then the `TIDAL_CLIENT_ID` environment variable, then the build-time default.
 

@@ -9,8 +9,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-var testAccount = AccountInfo{Username: "listener", Country: "US", Email: "listener@example.com", EmailVerified: true,
-	Quality: "hires", AudioMode: "exclusive", AudioDevice: "alsa/hw:CARD=DAC,DEV=0", Autoplay: true}
+var testAccount = AccountInfo{Username: "listener", Country: "US", Email: "listener@example.com", EmailVerified: true}
 
 func TestAccountGoldens(t *testing.T) {
 	tests := []struct {
@@ -19,7 +18,7 @@ func TestAccountGoldens(t *testing.T) {
 		np   NowPlaying
 	}{
 		{"account_80x24", testAccount, NowPlaying{Best: "FLAC 24/192", BestSeen: time.Date(2026, 11, 22, 9, 0, 0, 0, time.UTC)}},
-		{"account_nothing_played_60x18", AccountInfo{Username: "new", Country: "GB", Email: "new@example.com", Quality: "lossless", AudioMode: "shared", AudioDevice: "auto"}, NowPlaying{}},
+		{"account_nothing_played_60x18", AccountInfo{Username: "new", Country: "GB", Email: "new@example.com"}, NowPlaying{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -40,10 +39,13 @@ func TestAccountView(t *testing.T) {
 	svc := &Services{}
 	v := NewAccountView(svc, testAccount)
 	out := ansi.Strip(v.Render(100, 20, true))
-	for _, want := range []string{"listener", "US", "listener@example.com", "nothing played yet", "hires", "exclusive", "alsa/hw:CARD=DAC,DEV=0", "config.toml"} {
+	for _, want := range []string{"listener", "US", "listener@example.com", "nothing played yet", "Settings (6)"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "Quality ") || strings.Contains(out, "Autoplay") {
+		t.Error("settings still shown in Account")
 	}
 	if strings.Contains(out, "not verified") {
 		t.Error("verified email marked")

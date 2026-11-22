@@ -355,3 +355,102 @@ func waitFor(t *testing.T, cond func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
+func TestSetQuality(t *testing.T) {
+	r, stub, _, _ := newTestResolver(t)
+	ctx := context.Background()
+	if _, err := r.Resolve(ctx, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.SetQuality(config.QualityAAC); err != nil {
+		t.Fatal(err)
+	}
+	aac, _ := FormatsFor(config.QualityAAC)
+	if !slices.Equal(r.Formats(), aac) {
+		t.Errorf("formats %v", r.Formats())
+	}
+	// The cached manifest is dropped: it is fetched again at the new quality.
+	if _, err := r.Resolve(ctx, "1"); err != nil || stub.count("1") != 2 {
+		t.Fatalf("calls %d, err %v", stub.count("1"), err)
+	}
+	stub.mu.Lock()
+	last := stub.formats[len(stub.formats)-1]
+	stub.mu.Unlock()
+	if !slices.Equal(last, aac) {
+		t.Errorf("fetched with %v", last)
+	}
+	if err := r.SetQuality("best"); err == nil || !slices.Equal(r.Formats(), aac) {
+		t.Errorf("bad quality: %v, formats %v", err, r.Formats())
+	}
+}
+
+// A fetch that finishes after the quality changed answers its caller but
+// is not cached: the next Resolve fetches again.
+func TestSetQualityOldFetchNotCached(t *testing.T) {
+	r, stub, _, _ := newTestResolver(t)
+	stub.gate = make(chan struct{})
+	old := make(chan error, 1)
+	go func() { _, err := r.Resolve(context.Background(), "1"); old <- err }()
+	waitInflight(t, r, "1")
+	r.SetQuality(config.QualityAAC)
+	stub.gate <- struct{}{} // only the old fetch finishes
+	if err := <-old; err != nil {
+		t.Fatal(err)
+	}
+	close(stub.gate)
+	if _, err := r.Resolve(context.Background(), "1"); err != nil || stub.count("1") != 2 {
+		t.Errorf("fetches %d, err %v: the old-quality manifest was cached", stub.count("1"), err)
+	}
+}
+
+// A fetch running when the quality changes still answers its callers, but
+// is not cached, and a new Resolve starts a fetch at the new quality.
+func TestSetQualityDuringFetch(t *testing.T) {
+	r, stub, _, _ := newTestResolver(t)
+	stub.gate = make(chan struct{})
+	ctx := context.Background()
+	old := make(chan error, 1)
+	go func() { _, err := r.Resolve(ctx, "1"); old <- err }()
+	waitInflight(t, r, "1")
+	r.SetQuality(config.QualityLossless)
+	fresh := make(chan error, 1)
+	go func() { _, err := r.Resolve(ctx, "1"); fresh <- err }()
+	waitInflight(t, r, "1")
+	close(stub.gate)
+	if err := <-old; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-fresh; err != nil {
+		t.Fatal(err)
+	}
+	if n := stub.count("1"); n != 2 {
+		t.Errorf("fetches %d, want 2", n)
+	}
+	r.mu.Lock()
+	m, cached := r.cache["1"]
+	inflight := len(r.inflight)
+	r.mu.Unlock()
+	lossless, _ := FormatsFor(config.QualityLossless)
+	stub.mu.Lock()
+	defer stub.mu.Unlock()
+	if !cached || inflight != 0 || !slices.ContainsFunc(stub.formats, func(f []tidal.Format) bool { return slices.Equal(f, lossless) }) {
+		t.Errorf("cached %v %+v inflight %d", cached, m.Hash, inflight)
+	}
+}
+
+func waitInflight(t *testing.T, r *Resolver, id string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		r.mu.Lock()
+		_, ok := r.inflight[id]
+		r.mu.Unlock()
+		if ok {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("no fetch started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}

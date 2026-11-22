@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io/fs"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -58,10 +59,30 @@ type Config struct {
 	Quality Quality `toml:"quality"`
 	// Autoplay continues with track radio when the queue ends (decision
 	// 62). It is the value at startup; the UI can toggle it.
-	Autoplay bool  `toml:"autoplay"`
-	Audio    Audio `toml:"audio"`
-	Auth     Auth  `toml:"auth"`
+	Autoplay   bool       `toml:"autoplay"`
+	Audio      Audio      `toml:"audio"`
+	Visualizer Visualizer `toml:"visualizer"`
+	Auth       Auth       `toml:"auth"`
 }
+
+// Visualizer holds the spectrum visualizer settings (decisions 69 to 71).
+type Visualizer struct {
+	// Enabled is the value at startup; v toggles it.
+	Enabled bool `toml:"enabled"`
+	// Theme is one of VisualizerThemes.
+	Theme string `toml:"theme"`
+	// Custom is the "custom" theme: 4 colors "#rrggbb", bottom to top.
+	Custom []string `toml:"custom"`
+}
+
+// ThemeCustom is the theme read from visualizer.custom.
+const ThemeCustom = "custom"
+
+// VisualizerThemes lists the visualizer themes, in the order the Settings
+// section cycles through them. "terminal" follows the terminal's palette.
+var VisualizerThemes = []string{"terminal", "burnt orange", "ice blue", "forest green", "royal purple", "deep red", ThemeCustom}
+
+var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // Audio holds output settings.
 type Audio struct {
@@ -98,9 +119,10 @@ func Defaults(getenv func(string) string) Config {
 		clientID = v
 	}
 	return Config{
-		Quality: QualityHiRes,
-		Audio:   Audio{Mode: AudioShared, Device: DefaultAudioDevice},
-		Auth:    Auth{ClientID: clientID},
+		Quality:    QualityHiRes,
+		Audio:      Audio{Mode: AudioShared, Device: DefaultAudioDevice},
+		Visualizer: Visualizer{Theme: "terminal"},
+		Auth:       Auth{ClientID: clientID},
 	}
 }
 
@@ -156,6 +178,19 @@ func (c Config) Validate() error {
 			return &ValidationError{Key: "audio.device", Reason: fmt.Sprintf(
 				`exclusive mode needs an ALSA hardware device such as "alsa/hw:CARD=Name,DEV=0", not %q (run needle -list-devices)`,
 				c.Audio.Device)}
+		}
+	}
+	if !slices.Contains(VisualizerThemes, c.Visualizer.Theme) {
+		return &ValidationError{Key: "visualizer.theme", Reason: fmt.Sprintf("%q is not one of %s", c.Visualizer.Theme, strings.Join(VisualizerThemes, ", "))}
+	}
+	if len(c.Visualizer.Custom) > 0 || c.Visualizer.Theme == ThemeCustom {
+		if len(c.Visualizer.Custom) != 4 {
+			return &ValidationError{Key: "visualizer.custom", Reason: `needs exactly 4 colors such as "#1a2b3c", bottom to top`}
+		}
+		for _, col := range c.Visualizer.Custom {
+			if !hexColor.MatchString(col) {
+				return &ValidationError{Key: "visualizer.custom", Reason: fmt.Sprintf(`%q is not a color like "#1a2b3c"`, col)}
+			}
 		}
 	}
 	if c.Auth.ClientID != "" && !clientIDPattern.MatchString(c.Auth.ClientID) {

@@ -43,8 +43,12 @@ const (
 
 // Status is a snapshot of the player for the UI.
 type Status struct {
-	State    PlayState
-	Track    *Track
+	State PlayState
+	Track *Track
+	// Handle is the queue entry of Track, for Manifest.
+	Handle queue.Handle
+	// Mode is the audio mode in use; SetAudio changes it.
+	Mode     config.AudioMode
 	Position time.Duration
 	Duration time.Duration
 	// Preview is set when TIDAL only provided a preview; PreviewMessage
@@ -90,6 +94,7 @@ type loadResult struct {
 	manifest tidal.Manifest
 	err      error
 	preload  bool
+	epoch    uint64 // of a preload: DropPreload discards older ones
 }
 
 // Player connects the queue, the manifest resolver, and the engine. Its
@@ -113,10 +118,14 @@ type Player struct {
 	manifests  map[queue.Handle]tidal.Manifest
 	preloaded  queue.Handle
 	preloading bool
-	resumed    map[queue.Handle]bool
-	skipped    int // unavailable tracks skipped in a row (decision 58)
-	format     Event
-	st         Status
+	epoch      uint64 // bumped by DropPreload
+	// pauseOnStart pauses the track reloaded by SetAudio once it starts,
+	// because it was paused before the switch.
+	pauseOnStart queue.Handle
+	resumed      map[queue.Handle]bool
+	skipped      int // unavailable tracks skipped in a row (decision 58)
+	format       Event
+	st           Status
 
 	// loaded, when set (tests only), is called after each resolve result is
 	// handled on the Run goroutine.
@@ -141,7 +150,7 @@ func New(cfg Config) *Player {
 		manifests: map[queue.Handle]tidal.Manifest{},
 		resumed:   map[queue.Handle]bool{},
 	}
-	p.st = Status{Volume: 100, VolumeEnabled: cfg.Mode != config.AudioExclusive}
+	p.st = Status{Volume: 100, VolumeEnabled: cfg.Mode != config.AudioExclusive, Mode: cfg.Mode}
 	p.status.set(p.st)
 	return p
 }
@@ -286,6 +295,25 @@ func (p *Player) SetVolume(ctx context.Context, percent float64) error {
 	})
 }
 
+// ErrNoManifest means the player holds no manifest for that queue entry.
+var ErrNoManifest = errors.New("player: no manifest for this track")
+
+// Manifest returns the DASH manifest of the loaded (or preloaded) queue
+// entry h, for the visualizer's own decode. It only reads: the engine and
+// the bit-perfect assessment are not touched (decision 67).
+func (p *Player) Manifest(ctx context.Context, h queue.Handle) ([]byte, error) {
+	var mpd []byte
+	err := p.do(ctx, func(context.Context) error {
+		m, ok := p.manifests[h]
+		if !ok {
+			return ErrNoManifest
+		}
+		mpd = append([]byte(nil), m.MPD...)
+		return nil
+	})
+	return mpd, err
+}
+
 // QueueChanged must be called after the queue is edited, so a preloaded
 // track that is no longer next is withdrawn.
 func (p *Player) QueueChanged(ctx context.Context) error {
@@ -298,6 +326,67 @@ func (p *Player) QueueChanged(ctx context.Context) error {
 		}
 		p.preloaded = 0
 		return p.engine.ClearPreload(rctx)
+	})
+}
+
+// DropPreload withdraws the preloaded next track and ignores a preload
+// still being fetched, so the next track is fetched again: after a quality
+// change (decision 78). The playing track is not touched.
+func (p *Player) DropPreload(ctx context.Context) error {
+	return p.do(ctx, func(rctx context.Context) error {
+		p.epoch++
+		p.preloading = false
+		if p.preloaded == 0 {
+			return nil
+		}
+		delete(p.manifests, p.preloaded)
+		p.preloaded = 0
+		if p.engine == nil {
+			return nil
+		}
+		return p.engine.ClearPreload(rctx)
+	})
+}
+
+// Audio is an audio output setup for SetAudio.
+type Audio struct {
+	Mode      config.AudioMode
+	NewEngine func(ctx context.Context) (Engine, error)
+	Prober    Prober
+}
+
+// SetAudio switches to another audio mode or device without a restart
+// (decision 79): the engine is closed, and the current track is reloaded
+// on a new one at its position. Paused stays paused; stopped stays stopped
+// and the new engine starts with the next play.
+func (p *Player) SetAudio(ctx context.Context, a Audio) error {
+	return p.do(ctx, func(rctx context.Context) error {
+		p.cfg.Mode, p.cfg.NewEngine, p.cfg.Prober = a.Mode, a.NewEngine, a.Prober
+		p.st.VolumeEnabled, p.st.Mode = a.Mode != config.AudioExclusive, a.Mode
+		p.format, p.st.Output, p.st.Indicator = Event{}, nil, Assessment{}
+		if p.engine == nil {
+			return nil
+		}
+		if err := p.engine.Close(); err != nil {
+			p.logger.Debug("engine close for audio switch", "err", err)
+		}
+		p.engine, p.events = nil, nil
+		p.logger.Info("audio output switched", "mode", a.Mode, "track_id", p.trackID())
+		was := p.st.State
+		if was != Playing && was != Paused && was != Loading {
+			p.preloaded, p.preloading = 0, false
+			return nil
+		}
+		s := p.cfg.Queue.Snapshot()
+		if s.Current == nil || s.Current.Handle != p.current {
+			return nil
+		}
+		p.pauseOnStart = 0
+		if was == Paused {
+			p.pauseOnStart = p.current
+		}
+		p.load(p.current, s.Current.Item, p.st.Position)
+		return nil
 	})
 }
 
@@ -322,7 +411,7 @@ func (p *Player) loadCurrent() {
 func (p *Player) load(h queue.Handle, t Track, start time.Duration) {
 	p.gen++
 	gen := p.gen
-	p.current = h
+	p.current, p.st.Handle = h, h
 	p.preloaded, p.preloading = 0, false
 	p.st.State, p.st.Track, p.st.Position, p.st.Message = Loading, &t, start, ""
 	p.st.EndOfQueue = false
@@ -345,6 +434,9 @@ func (p *Player) onLoaded(ctx context.Context, r loadResult) {
 		return // superseded
 	}
 	if r.preload {
+		if r.epoch != p.epoch {
+			return // dropped by DropPreload
+		}
 		p.preloading = false
 		up := p.cfg.Queue.Snapshot().Upcoming
 		if r.err != nil || p.engine == nil || len(up) == 0 || up[0].Handle != r.handle {
@@ -463,6 +555,12 @@ func (p *Player) onEvent(ctx context.Context, ev Event) {
 		if p.preloaded == h {
 			p.preloaded = 0
 		}
+		if p.pauseOnStart == h {
+			p.pauseOnStart = 0
+			if err := p.setPaused(ctx, true); err != nil {
+				p.logger.Warn("pause after audio switch failed", "track_id", m.TrackID, "err", err)
+			}
+		}
 		for k := range p.resumed {
 			if k != h {
 				delete(p.resumed, k)
@@ -525,7 +623,7 @@ func (p *Player) onEnded(ctx context.Context, h queue.Handle, ev Event) {
 	next := s.Current.Handle
 	if next == p.preloaded {
 		// mpv is already playing it gaplessly.
-		p.current = next
+		p.current, p.st.Handle = next, next
 		p.st.Track, p.st.Position, p.st.Duration = &s.Current.Item, 0, s.Current.Item.Duration
 		return
 	}
@@ -546,7 +644,7 @@ func (p *Player) maybePreload(ev Event) {
 		return
 	}
 	p.preloading = true
-	go p.resolve(loadResult{gen: p.gen, handle: up[0].Handle, track: up[0].Item, preload: true})
+	go p.resolve(loadResult{gen: p.gen, handle: up[0].Handle, track: up[0].Item, preload: true, epoch: p.epoch})
 }
 
 func (p *Player) assess(ctx context.Context) {

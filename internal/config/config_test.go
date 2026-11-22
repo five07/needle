@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -65,6 +66,28 @@ client_id = "abc_DEF-123.x"
 				Auth:     Auth{ClientID: "abc_DEF-123.x"},
 			},
 		},
+		{
+			name: "visualizer settings",
+			body: new(`
+[visualizer]
+enabled = true
+theme = "custom"
+custom = ["#000000", "#112233", "#AbCdEf", "#ffffff"]
+`),
+			want: Config{Quality: QualityHiRes, Audio: defaults.Audio,
+				Visualizer: Visualizer{Enabled: true, Theme: "custom", Custom: []string{"#000000", "#112233", "#AbCdEf", "#ffffff"}}},
+		},
+		{
+			name: "a named theme",
+			body: new("[visualizer]\ntheme = \"burnt orange\""),
+			want: Config{Quality: QualityHiRes, Audio: defaults.Audio, Visualizer: Visualizer{Theme: "burnt orange"}},
+		},
+		{name: "unknown theme", body: new("[visualizer]\ntheme = \"neon\""), wantKey: "visualizer.theme"},
+		{name: "custom theme without colors", body: new("[visualizer]\ntheme = \"custom\""), wantKey: "visualizer.custom"},
+		{name: "custom colors: too few", body: new("[visualizer]\ncustom = [\"#000000\"]"), wantKey: "visualizer.custom"},
+		{name: "custom colors: not hex", body: new("[visualizer]\ncustom = [\"#000000\", \"#000000\", \"red\", \"#000000\"]"), wantKey: "visualizer.custom"},
+		{name: "custom colors: short hex", body: new("[visualizer]\ncustom = [\"#000\", \"#000000\", \"#000000\", \"#000000\"]"), wantKey: "visualizer.custom"},
+		{name: "unknown visualizer key", body: new("[visualizer]\nfps = 60"), wantKey: "visualizer.fps"},
 		{
 			name:       "autoplay must be a boolean",
 			body:       new(`autoplay = "yes"`),
@@ -201,7 +224,10 @@ client_id = "abc_DEF-123.x"
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
-				if got != tt.want {
+				if tt.want.Visualizer.Theme == "" {
+					tt.want.Visualizer.Theme = "terminal" // the default, unless a case sets it
+				}
+				if !reflect.DeepEqual(got, tt.want) {
 					t.Errorf("Load() = %+v, want %+v", got, tt.want)
 				}
 			}

@@ -46,11 +46,12 @@ const (
 // Resolver resolves track IDs to manifests. It is safe for concurrent use.
 type Resolver struct {
 	fetcher Fetcher
-	formats []tidal.Format
 	logger  *slog.Logger
 	now     func() time.Time
 
 	mu       sync.Mutex
+	formats  []tidal.Format
+	gen      uint64 // bumped by SetQuality: older fetches are not cached
 	cache    map[string]tidal.Manifest
 	inflight map[string]*call
 }
@@ -78,7 +79,29 @@ func NewResolver(f Fetcher, q config.Quality, logger *slog.Logger) (*Resolver, e
 }
 
 // Formats returns the formats requested for the configured quality.
-func (r *Resolver) Formats() []tidal.Format { return slices.Clone(r.formats) }
+func (r *Resolver) Formats() []tidal.Format {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return slices.Clone(r.formats)
+}
+
+// SetQuality changes the quality for the manifests fetched from now on
+// (decision 78). Cached manifests are dropped, and fetches already running
+// at the old quality are not cached, so the next track is fetched again.
+// Callers already waiting on such a fetch still get its result.
+func (r *Resolver) SetQuality(q config.Quality) error {
+	formats, err := FormatsFor(q)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.formats = formats
+	r.gen++
+	clear(r.cache)
+	clear(r.inflight)
+	return nil
+}
 
 // Resolve returns a manifest for trackID that stays valid for the whole
 // track. A cached manifest is reused only if its signed URLs outlive the
@@ -131,16 +154,18 @@ func (r *Resolver) start(ctx context.Context, trackID string) (*call, tidal.Mani
 	// The shared request must not die with the first caller's context;
 	// each caller stops waiting on its own context instead. The HTTP client
 	// timeout bounds the request.
-	go r.fetch(context.WithoutCancel(ctx), trackID, c)
+	go r.fetch(context.WithoutCancel(ctx), trackID, c, slices.Clone(r.formats), r.gen)
 	return c, tidal.Manifest{}, false
 }
 
-func (r *Resolver) fetch(ctx context.Context, trackID string, c *call) {
-	m, err := r.fetcher.TrackManifest(ctx, trackID, r.formats)
+func (r *Resolver) fetch(ctx context.Context, trackID string, c *call, formats []tidal.Format, gen uint64) {
+	m, err := r.fetcher.TrackManifest(ctx, trackID, formats)
 	r.mu.Lock()
-	delete(r.inflight, trackID)
-	if err == nil {
-		r.storeLocked(m)
+	if gen == r.gen { // else SetQuality dropped this call already
+		delete(r.inflight, trackID)
+		if err == nil {
+			r.storeLocked(m)
+		}
 	}
 	r.mu.Unlock()
 	c.m, c.err = m, err

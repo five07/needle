@@ -207,9 +207,10 @@ func TestSidebarKeys(t *testing.T) {
 	}{
 		{[]string{"j"}, SectionLibrary, paneSidebar},
 		{[]string{"down", "down"}, SectionDiscovery, paneSidebar},
-		{[]string{"G"}, SectionAccount, paneSidebar},
-		{[]string{"G", "j"}, SectionAccount, paneSidebar},
-		{[]string{"G", "k", "up"}, SectionDiscovery, paneSidebar},
+		{[]string{"G"}, SectionSettings, paneSidebar},
+		{[]string{"G", "j"}, SectionSettings, paneSidebar},
+		{[]string{"G", "k", "up"}, SectionQueue, paneSidebar},
+		{[]string{"6"}, SectionSettings, paneSidebar},
 		{[]string{"G", "g"}, SectionSearch, paneSidebar},
 		{[]string{"k"}, SectionSearch, paneSidebar},
 		{[]string{"4"}, SectionQueue, paneSidebar},
@@ -696,5 +697,27 @@ func TestSanitize(t *testing.T) {
 	}
 	if strings.Contains(l.Render(10, 1, false), "]52") {
 		t.Error("escape sequence reached the screen")
+	}
+}
+
+// At the minimum height the sidebar is shorter than the section list: it
+// scrolls to keep the current section in view, and clicks follow it.
+func TestSidebarScrollsAtMinimumHeight(t *testing.T) {
+	f := newFixture(t, MinWidth, MinHeight)
+	if f.m.layout.Sidebar.H >= int(sectionCount) {
+		t.Skip("the sidebar fits")
+	}
+	f.keys("6")
+	side := f.m.sidebarLines(f.m.layout.Sidebar)
+	if got := strings.TrimSpace(ansi.Strip(side[len(side)-1])); got != "≡" {
+		t.Errorf("last row %q, want Settings", got)
+	}
+	f.m.Update(tea.MouseClickMsg{X: f.m.layout.Sidebar.X, Y: f.m.layout.Sidebar.Y, Button: tea.MouseLeft})
+	if f.m.section != SectionLibrary {
+		t.Errorf("clicked the top row: section %d, want Library", f.m.section)
+	}
+	f.keys("1")
+	if got := strings.TrimSpace(ansi.Strip(f.m.sidebarLines(f.m.layout.Sidebar)[0])); got != "S" {
+		t.Errorf("top row %q, want Search", got)
 	}
 }

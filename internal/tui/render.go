@@ -62,19 +62,37 @@ func (m *Model) header(w int) string {
 	return styleBorder.Render("┌ ") + styleTitle.Render(appName) + styleBorder.Render(" "+strings.Repeat("─", fill)+headerKey+"┐")
 }
 
+// sidebarTop is the first section the sidebar shows: 0, unless the
+// sidebar is shorter than the section list (the minimum height) and the
+// current section would be below it.
+func (m *Model) sidebarTop() int {
+	return max(int(m.section)-m.layout.Sidebar.H+1, 0)
+}
+
+// compactLabel is a section's mark in the compact letter strip: its first
+// letter, except Settings, which would repeat Search's "S".
+func compactLabel(s Section, title string) string {
+	if s == SectionSettings {
+		return "≡"
+	}
+	return string([]rune(title)[:1])
+}
+
 // sidebarLines draws the section list, full labels or the letter strip.
 func (m *Model) sidebarLines(r Rect) []string {
 	out := make([]string, r.H)
-	for i := range out {
+	top := m.sidebarTop()
+	for y := range out {
+		i := top + y
 		if i >= int(sectionCount) {
-			out[i] = strings.Repeat(" ", r.W)
+			out[y] = strings.Repeat(" ", r.W)
 			continue
 		}
 		label := m.stacks[i][0].Title()
 		var line string
 		switch {
 		case m.layout.Compact:
-			line = center(string([]rune(label)[:1]), r.W)
+			line = center(compactLabel(Section(i), label), r.W)
 		case Section(i) == m.section:
 			line = fit(" ▸ "+label, r.W)
 		default:
@@ -87,7 +105,7 @@ func (m *Model) sidebarLines(r Rect) []string {
 				line = styleSelectedDim.Render(line)
 			}
 		}
-		out[i] = line
+		out[y] = line
 	}
 	return out
 }

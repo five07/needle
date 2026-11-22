@@ -999,3 +999,209 @@ func TestEndOfQueue(t *testing.T) {
 		t.Error("skip at the end: EndOfQueue not set")
 	}
 }
+
+// The visualizer reads the manifest and the status only: neither touches
+// the engine, so a bit-perfect track stays bit-perfect (TASK-020 AC #2).
+func TestManifestDoesNotTouchPlayback(t *testing.T) {
+	h := newHarness(t, config.AudioExclusive, "a", "b")
+	h.p.Play(ctx())
+	e := h.engine()
+	ha := h.handle(0)
+	waitFor(t, func() bool { return e.has(fmt.Sprintf("play %d@0s", ha)) })
+	h.send(e, Event{Kind: EventStarted, Key: uint64(ha)})
+	h.send(e, Event{Kind: EventFormat, Decoded: AudioParams{192000, 2, "s32"}, Output: AudioParams{192000, 2, "s32"}, Volume: 100})
+	before := h.p.Status()
+	if before.Indicator.State != BitPerfect || before.Handle != ha {
+		t.Fatalf("status %+v", before)
+	}
+	e.mu.Lock()
+	calls := len(e.calls)
+	e.mu.Unlock()
+	for range 20 {
+		mpd, err := h.p.Manifest(ctx(), ha)
+		if err != nil || string(mpd) != "<MPD/>" {
+			t.Fatalf("manifest %q, %v", mpd, err)
+		}
+		mpd[0] = 'X' // a copy: the player's manifest is not changed
+		h.p.Status()
+	}
+	after := h.p.Status()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(e.calls) != calls || after.Indicator != before.Indicator || after.State != Playing {
+		t.Errorf("engine calls %v, indicator %+v", e.calls[calls:], after.Indicator)
+	}
+	if m, _ := h.p.Manifest(ctx(), ha); string(m) != "<MPD/>" {
+		t.Errorf("the player's manifest changed: %q", m)
+	}
+	if _, err := h.p.Manifest(ctx(), h.handle(1)); !errors.Is(err, ErrNoManifest) {
+		t.Errorf("not loaded: %v", err)
+	}
+}
+
+func TestStatusHandleFollowsGapless(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.p.Play(ctx())
+	e := h.engine()
+	ha, hb := h.handle(0), h.handle(1)
+	h.send(e, Event{Kind: EventStarted, Key: uint64(ha)})
+	h.send(e, Event{Kind: EventProgress, Key: uint64(ha), Position: 28 * time.Second, Duration: 30 * time.Second})
+	waitFor(t, func() bool { e.mu.Lock(); defer e.mu.Unlock(); return len(e.preloads) == 1 })
+	h.send(e, Event{Kind: EventEnded, Key: uint64(ha), Reason: EndEOF})
+	if s := h.p.Status(); s.Handle != hb {
+		t.Errorf("handle %d after the gapless switch, want %d", s.Handle, hb)
+	}
+	if _, err := h.p.Manifest(ctx(), hb); err != nil {
+		t.Errorf("preloaded manifest: %v", err)
+	}
+}
+
+// newAudio returns an Audio whose engines and prober the test can see.
+func (h *harness) newAudio(mode config.AudioMode, made *atomic.Int32) Audio {
+	return Audio{Mode: mode, Prober: h.prober, NewEngine: func(ctx context.Context) (Engine, error) {
+		made.Add(1)
+		h.mu.Lock()
+		defer h.mu.Unlock()
+		e := newFakeEngine()
+		h.engines = append(h.engines, e)
+		return e, nil
+	}}
+}
+
+func TestSetAudioWhilePlaying(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.p.Play(ctx())
+	e1 := h.engine()
+	ha := h.handle(0)
+	waitFor(t, func() bool { return e1.has(fmt.Sprintf("play %d@0s", ha)) })
+	h.send(e1, Event{Kind: EventStarted, Key: uint64(ha)})
+	h.send(e1, Event{Kind: EventFormat, Decoded: AudioParams{192000, 2, "s32"}, Output: AudioParams{48000, 2, "float"}, Volume: 60})
+	h.send(e1, Event{Kind: EventProgress, Key: uint64(ha), Position: 12 * time.Second, Duration: 30 * time.Second})
+	if s := h.p.Status(); s.Indicator.State != Altered || !s.VolumeEnabled {
+		t.Fatalf("shared status %+v", s)
+	}
+	var made atomic.Int32
+	if err := h.p.SetAudio(ctx(), h.newAudio(config.AudioExclusive, &made)); err != nil {
+		t.Fatal(err)
+	}
+	e1.mu.Lock()
+	closed := e1.closed
+	e1.mu.Unlock()
+	s := h.p.Status()
+	if !closed || s.VolumeEnabled || s.Mode != config.AudioExclusive || s.Indicator != (Assessment{}) || s.Output != nil || s.State != Loading {
+		t.Fatalf("after the switch: closed %v status %+v", closed, s)
+	}
+	// The same track resumes at its position on the new engine.
+	var e2 *fakeEngine
+	waitFor(t, func() bool { e2 = h.engine(); return e2 != e1 && e2.has(fmt.Sprintf("play %d@12s", ha)) })
+	if made.Load() != 1 {
+		t.Errorf("engines made %d", made.Load())
+	}
+	// Events from the closed engine are ignored; the new one drives status,
+	// assessed in the new mode.
+	e1.events <- Event{Kind: EventFailed, Err: errors.New("old engine")}
+	h.send(e2, Event{Kind: EventStarted, Key: uint64(ha)})
+	h.send(e2, Event{Kind: EventFormat, Decoded: AudioParams{192000, 2, "s32"}, Output: AudioParams{192000, 2, "s32"}, Volume: 100})
+	if s := h.p.Status(); s.State != Playing || s.Indicator.State != BitPerfect || s.Message != "" {
+		t.Errorf("new engine status %+v", s)
+	}
+	if err := h.p.SetVolume(ctx(), 50); !errors.Is(err, ErrVolumeDisabled) {
+		t.Errorf("volume in exclusive: %v", err)
+	}
+}
+
+func TestSetAudioWhilePaused(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a")
+	h.p.Play(ctx())
+	e1 := h.engine()
+	ha := h.handle(0)
+	h.send(e1, Event{Kind: EventStarted, Key: uint64(ha)})
+	h.send(e1, Event{Kind: EventProgress, Key: uint64(ha), Position: 5 * time.Second, Duration: 30 * time.Second})
+	h.p.TogglePause(ctx())
+	var made atomic.Int32
+	h.p.SetAudio(ctx(), h.newAudio(config.AudioShared, &made))
+	var e2 *fakeEngine
+	waitFor(t, func() bool { e2 = h.engine(); return e2 != e1 && e2.has(fmt.Sprintf("play %d@5s", ha)) })
+	h.send(e2, Event{Kind: EventStarted, Key: uint64(ha)})
+	if s := h.p.Status(); s.State != Paused || !e2.has("pause true") {
+		t.Errorf("state %v calls %v", s.State, e2.callList())
+	}
+	// Only once: a later start (after a seek, say) is not paused again.
+	h.send(e2, Event{Kind: EventStarted, Key: uint64(ha)})
+	if n := strings.Count(strings.Join(e2.callList(), ","), "pause true"); n != 1 {
+		t.Errorf("paused %d times", n)
+	}
+}
+
+func TestSetAudioStoppedOrIdle(t *testing.T) {
+	// Before any playback there is no engine: the next play uses the new one.
+	h := newHarness(t, config.AudioShared, "a")
+	var made atomic.Int32
+	h.p.SetAudio(ctx(), h.newAudio(config.AudioExclusive, &made))
+	if made.Load() != 0 || h.p.Status().VolumeEnabled {
+		t.Fatalf("made %d", made.Load())
+	}
+	h.p.Play(ctx())
+	h.waitLoads(1)
+	if made.Load() != 1 {
+		t.Errorf("play did not use the new engine: %d", made.Load())
+	}
+	// Stopped: the engine closes and nothing plays until asked.
+	e := h.engine()
+	h.p.Stop(ctx())
+	var made2 atomic.Int32
+	h.p.SetAudio(ctx(), h.newAudio(config.AudioShared, &made2))
+	time.Sleep(20 * time.Millisecond)
+	e.mu.Lock()
+	closed := e.closed
+	e.mu.Unlock()
+	if !closed || made2.Load() != 0 || h.p.Status().State != Stopped {
+		t.Errorf("stopped: closed %v made %d state %v", closed, made2.Load(), h.p.Status().State)
+	}
+}
+
+func TestDropPreload(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a", "b")
+	h.p.Play(ctx())
+	e := h.engine()
+	ha, hb := h.handle(0), h.handle(1)
+	h.send(e, Event{Kind: EventStarted, Key: uint64(ha)})
+	h.send(e, Event{Kind: EventProgress, Key: uint64(ha), Position: 28 * time.Second, Duration: 30 * time.Second})
+	waitFor(t, func() bool { return e.has(fmt.Sprintf("preload %d", hb)) })
+	if err := h.p.DropPreload(ctx()); err != nil {
+		t.Fatal(err)
+	}
+	if !e.has("clear-preload") {
+		t.Error("preload not cleared")
+	}
+	if _, err := h.p.Manifest(ctx(), hb); !errors.Is(err, ErrNoManifest) {
+		t.Errorf("dropped manifest kept: %v", err)
+	}
+	// A preload still being fetched is ignored when it arrives.
+	gate := make(chan struct{})
+	h.res.mu.Lock()
+	h.res.gates["b"] = gate
+	h.res.mu.Unlock()
+	loads := h.loads.Load()
+	h.send(e, Event{Kind: EventProgress, Key: uint64(ha), Position: 28500 * time.Millisecond, Duration: 30 * time.Second})
+	h.p.DropPreload(ctx())
+	close(gate)
+	h.waitLoads(loads + 1)
+	e.mu.Lock()
+	preloads := len(e.preloads)
+	e.mu.Unlock()
+	if preloads != 1 {
+		t.Errorf("a dropped fetch was preloaded: %d preloads", preloads)
+	}
+	// The next progress preloads again.
+	h.res.mu.Lock()
+	delete(h.res.gates, "b")
+	h.res.mu.Unlock()
+	h.send(e, Event{Kind: EventProgress, Key: uint64(ha), Position: 29 * time.Second, Duration: 30 * time.Second})
+	waitFor(t, func() bool { e.mu.Lock(); defer e.mu.Unlock(); return len(e.preloads) == 2 })
+	// Nothing to drop, and no engine: no errors.
+	h2 := newHarness(t, config.AudioShared, "a")
+	if err := h2.p.DropPreload(ctx()); err != nil {
+		t.Error(err)
+	}
+}

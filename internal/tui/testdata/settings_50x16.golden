@@ -1,0 +1,16 @@
+┌ needle ─────────────────────── ? help ─ q quit ┐
+│ L │ Settings                                   │
+│ D │   Visualizer       on                      │
+│ Q │   Visualizer theme ice blue                │
+│ A │   Quality          hires                   │
+│ ≡ │   Visualizer changes last for this sessio… │
+├───┴────────────────────────────────────────────┤
+│                                                │
+│                                                │
+│                Nothing playing                 │
+│                                                │
+│                                                │
+│                                                │
+├────────────────────────────────────────────────┤
+│ j/k move · h back · enter change · / search    │
+└────────────────────────────────────────────────┘

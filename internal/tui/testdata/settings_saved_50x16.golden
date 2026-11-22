@@ -1,0 +1,16 @@
+┌ needle ─────────────────────── ? help ─ q quit ┐
+│ L │ Settings                                   │
+│ D │   Visualizer       off                     │
+│ Q │   Visualizer theme ice blue                │
+│ A │   Quality          hires                   │
+│ ≡ │   Changes are saved to config.toml. v and… │
+├───┴────────────────────────────────────────────┤
+│                                                │
+│                                                │
+│                Nothing playing                 │
+│                                                │
+│                                                │
+│                                                │
+├────────────────────────────────────────────────┤
+│ j/k move · h back · enter change · / search    │
+└────────────────────────────────────────────────┘

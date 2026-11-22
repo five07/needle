@@ -362,7 +362,7 @@ func TestNewUIRestoresQueue(t *testing.T) {
 		"play":[0,1,2],"current":1,"repeat":"all"}`), 0o600)
 	cfg := testConfig()
 	cfg.Autoplay = true
-	model, stop, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, "", stateDir, discardLogger())
+	model, stop, err := newUI(context.Background(), d, cfg, "", c, tidal.User{Country: "US"}, "", stateDir, discardLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -391,7 +391,7 @@ func TestNewUIStopSavesQueue(t *testing.T) {
 		t.Fatal(err)
 	}
 	stateDir := t.TempDir()
-	model, stop, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "US"}, "", stateDir, discardLogger())
+	model, stop, err := newUI(context.Background(), d, testConfig(), "", c, tidal.User{Country: "US"}, "", stateDir, discardLogger())
 	if err != nil {
 		t.Fatal(err)
 	}

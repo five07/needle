@@ -5,7 +5,7 @@
 │      │ Global                           Navigation                    │      │
 │      │ ?       toggle this help         k/↑     move up               │      │
 │      │ /       search                   j/↓     move down             │      │
-│      │ 1-5     jump to section          h/←     sidebar or back       │      │
+│      │ 1-6     jump to section          h/←     sidebar or back       │      │
 │      │ q       quit                     l/→     main pane             │      │
 │      │ ctrl+c  quit (even in input)     g       jump to top           │      │
 │      │                                  G       jump to bottom        │      │
@@ -16,8 +16,8 @@
 │      │ s       shuffle on/off                                         │      │
 │      │ r       repeat off/all/one       Search                        │      │
 │      │ c       autoplay radio on/off    enter   search (in the input) │      │
+│      │ v       visualizer on/off                                      │      │
 │      ╰────────────────────────────────────────────────────────────────╯      │
-│                                                                              │
 │                                                                              │
 │                                                                              │
 │ esc close help                                                               │

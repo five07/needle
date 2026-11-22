@@ -342,12 +342,12 @@ func TestNewUIErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := defaultDeps
-	if _, _, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "us"}, "", "", discardLogger()); err == nil {
+	if _, _, err := newUI(context.Background(), d, testConfig(), "", c, tidal.User{Country: "us"}, "", "", discardLogger()); err == nil {
 		t.Error("invalid country accepted")
 	}
 	cfg := testConfig()
 	cfg.Quality = "loud"
-	if _, _, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, "", "", discardLogger()); err == nil {
+	if _, _, err := newUI(context.Background(), d, cfg, "", c, tidal.User{Country: "US"}, "", "", discardLogger()); err == nil {
 		t.Error("invalid quality accepted")
 	}
 	// The player starts the configured engine with the audio settings.
@@ -420,7 +420,7 @@ func TestNewUIIgnoresBadLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, stop, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "US"}, "english", t.TempDir(), discardLogger())
+	_, stop, err := newUI(context.Background(), d, testConfig(), "", c, tidal.User{Country: "US"}, "english", t.TempDir(), discardLogger())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -563,5 +563,24 @@ func TestWatchStatusSnapshots(t *testing.T) {
 	case np := <-status:
 		t.Errorf("a second snapshot was queued: %+v", np)
 	default:
+	}
+}
+
+// After a live audio switch the bar shows the player's mode, not the one
+// from startup.
+func TestWatchStatusFollowsMode(t *testing.T) {
+	src := &stubStatus{updates: make(chan struct{}), status: &player.Status{Mode: config.AudioExclusive}}
+	status := make(chan tui.NowPlaying, 1)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		watchStatus(ctx, src, watch{notices: make(chan string, 8), status: status, q: queue.New[player.Track](), mode: config.AudioShared})
+		close(done)
+	}()
+	src.set("")
+	cancel()
+	<-done
+	if np := <-status; np.Mode != "exclusive" {
+		t.Errorf("mode %q", np.Mode)
 	}
 }

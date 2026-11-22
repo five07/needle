@@ -5,6 +5,8 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/five07/needle/internal/visualizer"
 )
 
 // Section indexes the sidebar entries.
@@ -17,6 +19,7 @@ const (
 	SectionDiscovery
 	SectionQueue
 	SectionAccount
+	SectionSettings
 	sectionCount
 )
 
@@ -40,7 +43,7 @@ const (
 // Config supplies the root view of each section. A nil view is shown as a
 // placeholder.
 type Config struct {
-	Search, Library, Discovery, Queue, Account View
+	Search, Library, Discovery, Queue, Account, Settings View
 	// Now returns the current time (tests replace it). Default time.Now.
 	Now func() time.Time
 	// Notices, when set, delivers texts from outside the UI (such as
@@ -52,6 +55,9 @@ type Config struct {
 	// Services lets the default Search view search and play. Nil leaves
 	// search unavailable.
 	Services *Services
+	// Spectrum, when set, delivers visualizer frames for the now-playing
+	// bar.
+	Spectrum <-chan visualizer.Frame
 	// OpenQueue starts on the Queue view, focused, with the current track
 	// selected (a restored queue, decision 59).
 	OpenQueue bool
@@ -85,9 +91,12 @@ type Model struct {
 	now      func() time.Time
 	notices  <-chan string
 	status   <-chan NowPlaying
-	svc      *Services
-	opened   map[View]bool // views whose Open has run
-	shown    View          // the view openCurrent last saw
+	// spectrumCh delivers visualizer frames; spectrum is the latest.
+	spectrumCh <-chan visualizer.Frame
+	spectrum   visualizer.Frame
+	svc        *Services
+	opened     map[View]bool // views whose Open has run
+	shown      View          // the view openCurrent last saw
 
 	// The scrolling title: the track it belongs to, when it started, and
 	// the tick chain.
@@ -99,7 +108,8 @@ type Model struct {
 
 // New returns the shell with the given section views.
 func New(cfg Config) *Model {
-	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices, status: cfg.Status, svc: cfg.Services, opened: map[View]bool{}}
+	m := &Model{now: cfg.Now, focus: paneSidebar, notices: cfg.Notices, status: cfg.Status, spectrumCh: cfg.Spectrum,
+		svc: cfg.Services, opened: map[View]bool{}}
 	if m.svc == nil {
 		m.svc = &Services{}
 	}
@@ -115,8 +125,11 @@ func New(cfg Config) *Model {
 	if cfg.Queue == nil && cfg.Services != nil && cfg.Services.Transport != nil {
 		cfg.Queue = NewQueueView(cfg.Services)
 	}
-	roots := [sectionCount]View{cfg.Search, cfg.Library, cfg.Discovery, cfg.Queue, cfg.Account}
-	names := [sectionCount]string{"Search", "Library", "Discovery", "Queue", "Account"}
+	if cfg.Settings == nil {
+		cfg.Settings = NewSettingsView(m.svc, SettingsInfo{})
+	}
+	roots := [sectionCount]View{cfg.Search, cfg.Library, cfg.Discovery, cfg.Queue, cfg.Account, cfg.Settings}
+	names := [sectionCount]string{"Search", "Library", "Discovery", "Queue", "Account", "Settings"}
 	for i, v := range roots {
 		if v == nil {
 			if i == int(SectionSearch) {
@@ -135,7 +148,7 @@ func New(cfg Config) *Model {
 }
 
 // Init implements tea.Model.
-func (m *Model) Init() tea.Cmd { return tea.Batch(m.listen(), m.listenStatus()) }
+func (m *Model) Init() tea.Cmd { return tea.Batch(m.listen(), m.listenStatus(), m.listenSpectrum()) }
 
 type noticeChanMsg struct{ text string }
 
@@ -199,6 +212,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case noticeChanMsg:
 		return m, tea.Batch(Notify(msg.text), m.listen())
+	case SpectrumMsg:
+		m.spectrum = msg.Frame
+		return m, m.listenSpectrum()
 	case NowPlayingMsg:
 		m.svc.playing = msg.NowPlaying
 		return m, tea.Batch(m.nowPlayingChanged(), m.startMarquee(), m.listenStatus())
@@ -286,6 +302,12 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 		return m.transport(actRepeat)
 	case key.Matches(k, Keys.Autoplay):
 		return m.transport(actAutoplay)
+	case key.Matches(k, Keys.Visualizer):
+		if v := m.svc.Visualizer; v != nil {
+			v.SetOn(!v.On())
+			return nil
+		}
+		return Notify("The visualizer is not available.")
 	}
 	if m.focus == paneSidebar {
 		switch {
@@ -335,7 +357,7 @@ func (m *Model) onClick(ms tea.Mouse) tea.Cmd {
 	switch {
 	case l.Sidebar.Contains(ms.X, ms.Y):
 		m.focus = paneSidebar
-		if row := ms.Y - l.Sidebar.Y; row < int(sectionCount) {
+		if row := ms.Y - l.Sidebar.Y + m.sidebarTop(); row < int(sectionCount) {
 			m.selectSection(Section(row))
 			if double {
 				m.focus = paneMain

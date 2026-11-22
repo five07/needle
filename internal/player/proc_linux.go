@@ -57,3 +57,9 @@ func checkPrivate(dir string) error {
 	}
 	return nil
 }
+
+// PrivateDir is privateDir for other packages (the visualizer's decoder
+// keeps its manifest copies there too).
+func PrivateDir(getenv func(string) string) (dir string, owned bool, err error) {
+	return privateDir(getenv)
+}

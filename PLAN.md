@@ -392,6 +392,84 @@ The scope was simplified: login stays in the terminal before the TUI starts (it 
     - b) As (a), but `a` appends after the autoplayed tracks, as a plain append.
     > MS: a
 
+### TASK-020 (visualizer)
+
+67. **Where the visualizer's audio comes from.** mpv plays the stream and cannot hand its samples back over IPC. Inserting an analysis filter into mpv's chain (`af=lavfi=...`) would put it in the audio path, which this task rules out.
+    - a) **(Recommended)** A second, silent mpv decodes the same stream for analysis only: `--ao=pcm` into a pipe in `$XDG_RUNTIME_DIR/needle/`, downmixed to mono at a low rate (about 22 kHz, 16-bit), started at the playback position and kept in step with it (re-synced on pause, seek, track change, or drift over about 100 ms). The playing mpv and the bit-perfect indicator are untouched, and it works the same in shared and exclusive mode. The cost is a second download of the stream while the visualizer is on (up to about 5 Mbit/s for hi-res) and a little CPU.
+    - b) Capture what PipeWire plays (`pw-record` from the default sink's monitor). No second download, but it works in shared mode only (exclusive mode bypasses PipeWire), and it also shows other apps' sound.
+    - c) Decorative only: animated bars not driven by the audio. Cheapest, but it is not a real visualizer.
+    > MS: a
+
+68. **What is drawn, and where.** You asked for it as the background of the now-playing view (the bar at the bottom, 6 rows inside the frame).
+    - a) **(Recommended)** Spectrum bars across the full width of the now-playing bar, in about 32 log-spaced frequency bands, drawn with the eighth-block characters `▁▂▃▄▅▆▇█` (8 levels per row, 48 in all). Cells with text (title, artists, format, progress, controls) are left as they are, so the text always stays readable; bars show in the empty cells around it. The layout does not change, so 80x24 stays as it is today (AC #3).
+    - b) As (a), but the bars also tint the background of the text cells under them, so the bars run unbroken behind the text. Text readability then depends on the theme's colors.
+    - c) A taller now-playing bar while the visualizer is on (for example 10 rows), with the extra rows for bars only. At 80x24 the main pane loses 4 rows.
+    > MS: a
+
+69. **Themes and the gradient.** Each theme has 4 colors, darkest at the bottom row band and brightest at the top. The 6 rows map to the 4 steps bottom to top as 1, 1, 2, 3, 4, 4, so each step covers at least one row.
+    - a) **(Recommended)** `terminal` uses the terminal's own palette (ANSI 4 dim, 4, 12, 14 bold, so it follows your Omarchy theme). The named themes have fixed hex colors I pick (for example `burnt orange` `#5a2a0a #8a3f12 #c4561a #f08a3c`), and you adjust them in review. `custom` reads 4 colors from `config.toml`: `[visualizer] custom = ["#hex", "#hex", "#hex", "#hex"]`, bottom to top. A theme or color that is not valid stops startup with an error naming the key, like other settings. The default theme is `terminal`.
+    - b) As (a), but you give me the hex colors for each named theme now.
+    > MS: a
+
+70. **The Settings section.** You want a new "Settings" sidebar entry for every non-TIDAL setting, with TASK-027 doing the rest of it.
+    - a) **(Recommended)** This task adds Settings as the 6th sidebar section (key `6`) with two rows: Visualizer (on/off) and Visualizer theme. `enter` toggles or cycles each, for the session; `custom` is offered only when it is defined in `config.toml`. Writing choices back to `config.toml`, and moving quality, audio mode, device, and autoplay out of the Account view into Settings, go to TASK-027 (I add that to its ACs).
+    - b) As (a), and the existing settings (quality, audio mode, device, autoplay) move to Settings now, read-only, so the Account view shows only TIDAL account details. TASK-027 then only makes them editable and saves them.
+    - c) No Settings section yet: the theme is set in `config.toml` only, and TASK-027 creates the section.
+    > MS: b
+
+71. **The toggle key and startup state** (AC #1).
+    - a) **(Recommended)** `v` toggles it in every view (like `c` for autoplay), and `visualizer.enabled = false` in `config.toml` sets it at startup, like autoplay (decision 62). The bar shows nothing extra for it.
+    - b) `v` only, always off at startup.
+    > MS: a
+
+72. **Refresh rate and idle.**
+    - a) **(Recommended)** About 20 frames per second while playing, with bars that fall smoothly when the sound drops. Paused or stopped, the bars fall to nothing within a second and the redraw stops, so an idle needle uses no CPU for it. The analysis decoder only runs while the visualizer is on and something is playing.
+    - b) 30 frames per second.
+    > MS: a
+
+### TASK-027 (editable settings)
+
+74. **Where the settings are edited.** The ticket says the Account view, but TASK-020 moved quality, audio mode, device, and autoplay to the Settings section (decision 70).
+    - a) **(Recommended)** Edit them in the Settings section. I reword AC #1 and #5 to say "Settings section" (and fix `tidal-tui -list-devices` in AC #2 to `needle`) with the backlog CLI, and rename the ticket to "Edit settings in the TUI".
+    - b) Keep the ACs as written and also show editable rows in Account.
+    > MS: a
+
+75. **Saving to config.toml while keeping comments (AC #3).** The TOML library in use (BurntSushi) can read but cannot rewrite a file while keeping its comments and layout, and other Go TOML libraries cannot either.
+    - a) **(Recommended)** A small editor in `internal/config` that changes only the line of the key that changed (`key = value`, keeping any comment after it on that line), or adds the key under its table (creating `[audio]` or `[visualizer]` at the end if missing) when the file does not have it. Every other line is kept byte for byte. The result is parsed and validated with `Load` before it replaces the file, written atomically and keeping the file's mode (0600 for a new file). No new dependency. Keys written as dotted keys or inline tables (`audio = { mode = "shared" }`) are not rewritten: the change then applies for the session and the view says it could not be saved, naming the key.
+    - b) Re-encode the whole file from the settings. Simple, but comments and layout are lost, which AC #3 rules out.
+    > MS: a
+
+76. **When changes are saved.**
+    - a) **(Recommended)** At once, on each change. A failed save shows a notice and is logged; the setting still applies for the session.
+    - b) Changes are collected and saved with a key (for example `w`), with a "not saved" mark until then.
+    > MS: a
+
+77. **The `v` and `c` keys.** Today they change the visualizer and autoplay for the session only, and the Settings rows show the config value.
+    - a) **(Recommended)** Rows in Settings change the saved setting and the session together. `v` and `c` stay quick session toggles that do not save, so pressing them does not rewrite your config. The rows show the saved value and, when the session differs, add "(now on)" or "(now off)".
+    - b) `v` and `c` save too, so there is one value and no difference to show.
+    > MS: a
+
+78. **Quality without a restart (AC #4).** The quality picks the formats requested for each track's manifest. Manifests are cached and the next track's is prefetched.
+    - a) **(Recommended)** Applies from the next track loaded: changing it drops the cached manifests except the current track's, so the prefetched next track is fetched again at the new quality. The track playing keeps its quality, and the row says "from the next track".
+    - b) Applies at once by reloading the current track at its position (a short gap).
+    - c) Saved only; applies after a restart.
+    > MS: a, with an "alert" - "Quality updates on the next track"
+
+79. **Audio mode and device without a restart (AC #4).** They are fixed when the audio engine (mpv) starts. Exclusive mode opens the sound card directly, and the bit-perfect check probes it.
+    - a) **(Recommended)** Saved and applied after a restart. The rows say "restart to apply" until then. This keeps the engine and the bit-perfect logic as they are.
+    - b) Applied at once: needle stops the audio engine and starts a new one with the new mode and device, resuming the current track at its position (a short gap, and it fails visibly if the device is busy).
+    > MS: b
+
+80. **Choosing the mode and device (AC #2).** Exclusive mode needs an ALSA hardware device (`alsa/hw:...`); shared mode takes `auto` or a PipeWire sink. A device from one mode is not valid in the other.
+    - a) **(Recommended)** `enter` on Quality and Audio mode cycles the choices. `enter` on Device opens a picker (like the add-to-playlist picker) listing the devices `needle -list-devices` shows for the selected mode, with `auto` first in shared mode and the current one marked. Switching the mode resets the device: to `auto` for shared, and for exclusive the picker opens at once and the mode change is saved only with the device picked (`esc` cancels both). If no device is listed, the picker says so and nothing changes.
+    - b) As (a), but the device can also be typed in freely.
+    > MS: a with a debounce
+
+81. **Visualizer theme rows.** Settings already cycles the theme for the session (TASK-020). With saving (AC #6):
+    - a) **(Recommended)** Each theme change is saved (per question 76), and `visualizer.custom` colors are not editable in the TUI (they stay config-only, as you asked in TASK-020).
+    - b) Theme changes stay session-only until a separate "save" action.
+    > MS: a, save on debounce
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -497,6 +575,21 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 64 | Autoplay mark | A dim `∞` before the title of each autoplayed Queue row, with `∞ autoplay` in the hint line. |
 | 65 | Autoplay off | Upcoming autoplayed entries are removed; your own stay; the current track finishes. |
 | 66 | Autoplay rules | Only with repeat off; next on the last track continues too; `a` inserts ahead of upcoming autoplayed entries; the mark is saved in `queue.json`. |
+| 67 | Visualizer source | A second, silent mpv decodes the playing track's MPD to mono 16-bit PCM at about 22 kHz into a pipe in the runtime directory, kept in step with the playback position. The playing mpv and the bit-perfect indicator are untouched; the stream is downloaded twice while it is on. |
+| 68 | Visualizer drawing | About 32 log-spaced spectrum bars across the now-playing bar with eighth-block characters, only in cells without text; the layout does not change. |
+| 69 | Visualizer themes | `terminal` (ANSI 4 dim, 4, 12, 14 bold), fixed hex colors for the named themes (adjusted in review), `custom` from `[visualizer] custom` (4 colors, bottom to top); 4 gradient steps over the 6 rows as 1, 1, 2, 3, 4, 4. Invalid values stop startup. Default `terminal`. |
+| 70 | Settings section | A 6th sidebar section, Settings (key `6`): visualizer on/off and theme (`enter` toggles or cycles, for the session), plus quality, audio mode, device, and autoplay moved there from the Account view, read-only. Saving to `config.toml` and editing the rest belong to TASK-027. |
+| 71 | Visualizer key | `v` in every view; `visualizer.enabled = false` in `config.toml` sets it at startup. |
+| 72 | Visualizer refresh | About 20 fps while playing; bars fall to nothing within a second when paused or stopped, then redraws stop. The decoder runs only while the visualizer is on and something plays. |
+| 73 | Six sections at the minimum size | At 50x16 the sidebar has 5 rows. It scrolls to keep the current section in view (clicks follow the scroll) instead of raising the minimum size (decision 22). In the compact strip, Settings is `≡` so it does not repeat Search's `S`. |
+| 74 | Where settings are edited | The Settings section (decision 70), not Account. TASK-027's ACs say so. |
+| 75 | Saving config.toml | A line editor in `internal/config`: only the changed key's line is rewritten (a trailing comment kept), or the key is added under its table (created at the end if missing). Every other byte is kept. The result is validated with `Load` before an atomic replace that keeps the file mode (0600 for a new file). No new dependency. Dotted keys or inline tables are not rewritten: the change applies for the session and a notice names the key. |
+| 76 | When settings save | Automatically, debounced (decisions 80, 81). A failed save shows a notice and is logged, and the setting still applies for the session. |
+| 77 | `v` and `c` | They stay session-only toggles that never save. Settings rows change the saved value and the session together, and show "(now on)"/"(now off)" when the session differs. |
+| 78 | Quality live | Applies from the next track loaded: cached manifests and the preloaded next track are dropped so they are fetched at the new quality. The playing track keeps its quality. A notice says "Quality updates on the next track". |
+| 79 | Mode and device live | Applied at once: needle closes the audio engine and starts one with the new mode and device, resuming the current track at its position (paused stays paused). A short gap is expected. A busy or failing device shows the usual playback error. |
+| 80 | Choosing mode and device | `enter` cycles quality and mode. `enter` on Device opens a picker of the devices `-list-devices` shows for the mode (`auto` first in shared mode, the current one marked). Switching to shared resets the device to `auto`. Switching to exclusive opens the picker at once, and the mode changes only with a device picked (`esc` cancels). The engine switch and the save wait for 1 s without further changes (debounce), so cycling does not restart the engine for each step. |
+| 81 | Visualizer theme saving | Theme and visualizer on/off from the Settings rows are saved with the same debounce. `visualizer.custom` stays config-only. |
 
 ## Definition of Done
 

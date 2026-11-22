@@ -42,12 +42,13 @@ type KeyMap struct {
 	Similar key.Binding
 
 	// Playback (TASK-013), in every view outside text inputs.
-	PlayPause key.Binding
-	NextTrack key.Binding
-	PrevTrack key.Binding
-	Shuffle   key.Binding
-	Repeat    key.Binding
-	Autoplay  key.Binding
+	PlayPause  key.Binding
+	NextTrack  key.Binding
+	PrevTrack  key.Binding
+	Shuffle    key.Binding
+	Repeat     key.Binding
+	Autoplay   key.Binding
+	Visualizer key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -56,7 +57,7 @@ var Keys = KeyMap{
 	ForceQ:   key.NewBinding(key.WithKeys("ctrl+c"), key.WithHelp("ctrl+c", "quit (even in input)")),
 	Help:     key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "toggle this help")),
 	Search:   key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "search")),
-	Sections: key.NewBinding(key.WithKeys("1", "2", "3", "4", "5"), key.WithHelp("1-5", "jump to section")),
+	Sections: key.NewBinding(key.WithKeys("1", "2", "3", "4", "5", "6"), key.WithHelp("1-6", "jump to section")),
 
 	Up:       key.NewBinding(key.WithKeys("k", "up"), key.WithHelp("k/↑", "move up")),
 	Down:     key.NewBinding(key.WithKeys("j", "down"), key.WithHelp("j/↓", "move down")),
@@ -82,16 +83,17 @@ var Keys = KeyMap{
 	Radio:   key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "radio")),
 	Similar: key.NewBinding(key.WithKeys("S"), key.WithHelp("S", "similar")),
 
-	PlayPause: key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "play / pause")),
-	NextTrack: key.NewBinding(key.WithKeys("n", "]"), key.WithHelp("n/]", "next track")),
-	PrevTrack: key.NewBinding(key.WithKeys("p", "["), key.WithHelp("p/[", "previous track")),
-	Shuffle:   key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "shuffle on/off")),
-	Repeat:    key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "repeat off/all/one")),
-	Autoplay:  key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "autoplay radio on/off")),
+	PlayPause:  key.NewBinding(key.WithKeys("space"), key.WithHelp("space", "play / pause")),
+	NextTrack:  key.NewBinding(key.WithKeys("n", "]"), key.WithHelp("n/]", "next track")),
+	PrevTrack:  key.NewBinding(key.WithKeys("p", "["), key.WithHelp("p/[", "previous track")),
+	Shuffle:    key.NewBinding(key.WithKeys("s"), key.WithHelp("s", "shuffle on/off")),
+	Repeat:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "repeat off/all/one")),
+	Autoplay:   key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "autoplay radio on/off")),
+	Visualizer: key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "visualizer on/off")),
 }
 
 func (k KeyMap) playbackGroup() helpGroup {
-	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay}}
+	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay, k.Visualizer}}
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

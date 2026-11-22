@@ -244,7 +244,9 @@ type watch struct {
 	saved *savedQueue
 	// auto, when set, continues the queue with radio (decision 63).
 	auto *autoplay
-	now  func() time.Time // default time.Now
+	// vis, when set, is woken on every change so it follows playback.
+	vis interface{ Wake() }
+	now func() time.Time // default time.Now
 }
 
 // watchStatus forwards player changes to the UI until ctx ends. It is the
@@ -271,13 +273,20 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 			}
 		}
 		st := p.Status()
+		if w.vis != nil {
+			w.vis.Wake()
+		}
 		var snap queue.Snapshot[player.Track]
 		if w.q != nil {
 			snap = w.q.Snapshot()
 			w.auto.check(ctx, st, snap)
 		}
 		if w.status != nil || w.mpris != nil {
-			np := nowPlaying(st, snap, w.mode)
+			mode := w.mode
+			if st.Mode != "" {
+				mode = st.Mode // after a live switch (decision 79)
+			}
+			np := nowPlaying(st, snap, mode)
 			np.Autoplay = w.auto != nil && w.auto.b.Autoplay()
 			if w.mpris != nil {
 				w.mpris.Update(mprisState(np, st.Volume))

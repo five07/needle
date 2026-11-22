@@ -197,7 +197,7 @@ func (m *Model) barLines(w int) []string {
 	out[barProgress] = progressLine(np, w)
 	controls, _ := controlsLine(np, w)
 	out[barControls] = controls
-	return out
+	return withSpectrum(out, m.spectrum, themeStyles(m.svc.theme, m.svc.custom), w)
 }
 
 // marquee returns title, or for a title wider than w a w-cell window

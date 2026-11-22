@@ -37,7 +37,7 @@ Everything in the now-playing bar is centered. The title is drawn at 2x size, so
 
 | # | Region | My interpretation | Source | MS |
 |---|---|---|---|---|
-| 1 | Sidebar | Fixed width (about 15 cols). Entries: Search, Library, Discovery, Queue, Account. Queue shows the upcoming count. | TASK-009 #1 | Queue and Account as sidebar entries (Q3) |
+| 1 | Sidebar | Fixed width (about 15 cols). Entries: Search, Library, Discovery, Queue, Account, Settings (decision 70; scrolls at the minimum height, decision 73). Queue shows the upcoming count. | TASK-009 #1 | Queue and Account as sidebar entries (Q3) |
 | 2 | Main pane | Shows the view selected in the sidebar. Drilling into an album/artist/playlist/mix pushes a sub-view; `esc`/`h`/`backspace` goes back **(guess)**. | TASK-009, TASK-010 #5 | |
 | 3 | Now-playing bar | Always visible at the bottom, 6 rows, every line centered. Hidden or reduced to one "nothing playing" line when idle **(guess)**. | TASK-009 #1, TASK-013 | Everything centered |
 | 4 | Hint line | One row of context-sensitive key hints for the focused view **(guess)**. Full list in `?` overlay. | TASK-009 #3 | |
@@ -68,7 +68,8 @@ Everything in the now-playing bar is centered. The title is drawn at 2x size, so
 | 5 | Discovery | Three sections: Daily Mixes, Discovery Mixes, New Release Mixes. Empty mixes hidden. Open a mix to get a track list. | Play, queue, radio, similar | TASK-012 | |
 | 6 | Radio / Similar | Result list opened from any item, shown as a sub-view in the main pane. | Same as tracks | TASK-012 #3, #4 | |
 | 7 | Queue | Now playing at top, then upcoming. History hidden **(guess)**. | Jump to item, remove, clear, shuffle, repeat | TASK-013 #6, Decision 11 | |
-| 8 | Account | Username, country, email, highest quality received so far, output mode/device, quality setting **(guess: last two)**. | Logout | TASK-014 | |
+| 8 | Account | Username, country, email, highest quality received so far. The settings moved to Settings (decision 70). | Logout | TASK-014 | |
+| 8a | Settings | Visualizer on/off and theme, quality, audio mode, device (picker), autoplay. Each row changes with `enter` and is saved to config.toml after a 1 s pause; mode and device switch the engine live. | `enter` change, `esc` cancel the picker | TASK-020, TASK-027 | Decisions 70, 74-81 |
 | 9 | Login | Full screen before anything else: app name, "Open this URL to log in", the URL (selectable), a spinner "waiting for browser…". | `o` re-open browser, `c` copy URL **(guess)**, `q` quit | TASK-014 #1 | |
 | 10 | Add to playlist picker | Modal list of the user's playlists. Shows "already in playlist" on duplicates. | `enter` add, `esc` cancel | TASK-011 #6 | |
 | 11 | Help overlay | Modal with all active bindings, grouped by global/view. | `esc`/`?` close | TASK-009 #3 | |

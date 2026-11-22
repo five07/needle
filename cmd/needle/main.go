@@ -52,9 +52,12 @@ type deps struct {
 	// sessionBus connects to the D-Bus session bus for MPRIS. Nil turns
 	// MPRIS off (tests).
 	sessionBus func() (*dbus.Conn, error)
+	// visualizerMPV is the mpv the visualizer decodes with (decision 67).
+	visualizerMPV string
 }
 
 var defaultDeps = deps{
+	visualizerMPV: "mpv",
 	runUI: func(ctx context.Context, m tea.Model) error {
 		_, err := tea.NewProgram(m, tea.WithContext(ctx)).Run()
 		return err
@@ -188,7 +191,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (%s).\n", user.Username, user.Country)
 
-	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, localeFromEnv(getenv), dirs.State, logger)
+	model, stopPlayer, err := newUI(ctx, d, cfg, configPath, client, user, localeFromEnv(getenv), dirs.State, logger)
 	if err != nil {
 		logger.Error("ui setup failed", "err", err)
 		fmt.Fprintf(stderr, "needle: %v\n", err)
@@ -209,7 +212,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 // newUI builds the terminal UI with the catalog and a running player (which
 // starts mpv on first playback). stop ends the player and waits for it to
 // close mpv.
-func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client, user tidal.User,
+func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, client *tidal.Client, user tidal.User,
 	locale, stateDir string, logger *slog.Logger) (model tea.Model, stop func(), err error) {
 	catalog, err := tidal.NewCatalog(client, user.Country)
 	if err != nil {
@@ -252,6 +255,8 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	}
 	w := watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best, saved: saved,
 		auto: newAutoplay(catalog, pb, logger)}
+	vis, stopVis := startVisualizer(uiCtx, p, d.visualizerMPV, cfg.Visualizer.Enabled, os.Getenv, logger)
+	w.vis = vis
 	mp, stopMPRIS := startMPRIS(d.sessionBus, pb, logger)
 	if mp != nil {
 		w.mpris = mp // only when registered: a nil *Service in the interface would not be nil
@@ -261,21 +266,58 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	if restored {
 		pb.edited() // the bar and Queue view show the restored queue at once
 	}
-	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified,
-		Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device,
-		Autoplay: cfg.Autoplay}
+	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified}
+	settings := tui.SettingsInfo{Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device,
+		Autoplay: cfg.Autoplay, Visualizer: cfg.Visualizer.Enabled, Theme: cfg.Visualizer.Theme, Custom: cfg.Visualizer.Custom, Themes: config.VisualizerThemes}
+
+	settingsSvc := newSettingsService(configPath, cfg.Audio, logger, func(text string) {
+		select {
+		case notices <- text:
+		default: // the hint line is busy; the log has it
+		}
+	})
+	settingsSvc.setQuality = func(q config.Quality) {
+		if err := resolver.SetQuality(q); err != nil {
+			logger.Warn("quality not changed", "quality", q, "err", err)
+			return
+		}
+		if err := p.DropPreload(uiCtx); err != nil && uiCtx.Err() == nil {
+			logger.Warn("preload not dropped", "err", err)
+		}
+	}
+	settingsSvc.setAutoplay = func(on bool) {
+		if err := pb.SetAutoplay(uiCtx, on); err != nil && uiCtx.Err() == nil {
+			logger.Warn("autoplay not changed", "err", err)
+		}
+	}
+	settingsSvc.setVisualizer = vis.SetOn
+	settingsSvc.switchAudio = func(a config.Audio) {
+		if err := p.SetAudio(uiCtx, audioFor(d, a, logger)); err != nil && uiCtx.Err() == nil {
+			logger.Warn("audio output not switched", "mode", a.Mode, "err", err)
+		}
+	}
+	settingsSvc.devices = listDevices(d)
 
 	svc := &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
-		Playback: pb, Transport: pb, Logger: logger}
+		Playback: pb, Transport: pb, Visualizer: vis, Settings: settingsSvc, Logger: logger}
 	model = tui.New(tui.Config{
 		Services:  svc,
 		Account:   tui.NewAccountView(svc, acct),
+		Settings:  tui.NewSettingsView(svc, settings),
 		Notices:   notices,
 		Status:    status,
+		Spectrum:  vis.Frames(),
 		OpenQueue: restored,
 	})
 	// Waiting for the watcher lets its last queue save finish before exit.
-	return model, func() { cancel(); <-done; <-watched; stopMPRIS() }, nil
+	return model, func() {
+		settingsSvc.Close()
+		cancel()
+		<-done
+		<-watched
+		stopVis()
+		stopMPRIS()
+	}, nil
 }
 
 // account returns the logged-in user, running the browser login first when
@@ -336,13 +378,13 @@ func printDevices(ctx context.Context, d deps, stdout, stderr io.Writer) int {
 
 // playerConfig configures the player for the audio settings in cfg.
 func playerConfig(d deps, cfg config.Config, r player.Resolver, q *queue.Queue[player.Track], logger *slog.Logger) player.Config {
-	mpvCfg := player.MPVConfig{Mode: cfg.Audio.Mode, Device: cfg.Audio.Device, Logger: logger}
+	a := audioFor(d, cfg.Audio, logger)
 	return player.Config{
-		Mode:      cfg.Audio.Mode,
-		NewEngine: func(ctx context.Context) (player.Engine, error) { return d.newEngine(ctx, mpvCfg) },
+		Mode:      a.Mode,
+		NewEngine: a.NewEngine,
 		Resolver:  r,
 		Queue:     q,
-		Prober:    player.NewProber(cfg.Audio.Mode, cfg.Audio.Device),
+		Prober:    a.Prober,
 		Logger:    logger,
 	}
 }

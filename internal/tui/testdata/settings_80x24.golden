@@ -1,0 +1,24 @@
+┌ needle ───────────────────────────────────────────────────── ? help ─ q quit ┐
+│   Search      │ Settings                                                     │
+│   Library     │   Visualizer       on                                        │
+│   Discovery   │   Visualizer theme ice blue                                  │
+│   Queue       │   Quality          hires                                     │
+│   Account     │   Audio mode       exclusive                                 │
+│ ▸ Settings    │   Device           alsa/hw:CARD=DAC,DEV=0                    │
+│               │   Autoplay         on at start                               │
+│               │                                                              │
+│               │   Visualizer changes last for this session. Change the othe… │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+│               │                                                              │
+├───────────────┴──────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                                                                              │
+│                               Nothing playing                                │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ j/k move · h back · enter change · / search · ? help · q quit                │
+└──────────────────────────────────────────────────────────────────────────────┘
