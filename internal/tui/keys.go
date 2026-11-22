@@ -49,6 +49,8 @@ type KeyMap struct {
 	Repeat     key.Binding
 	Autoplay   key.Binding
 	Visualizer key.Binding
+	VolumeDown key.Binding
+	VolumeUp   key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -90,10 +92,12 @@ var Keys = KeyMap{
 	Repeat:     key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "repeat off/all/one")),
 	Autoplay:   key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "autoplay radio on/off")),
 	Visualizer: key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "visualizer on/off")),
+	VolumeDown: key.NewBinding(key.WithKeys("-"), key.WithHelp("-", "volume down")),
+	VolumeUp:   key.NewBinding(key.WithKeys("="), key.WithHelp("=", "volume up")),
 }
 
 func (k KeyMap) playbackGroup() helpGroup {
-	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay, k.Visualizer}}
+	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay, k.Visualizer, k.VolumeDown, k.VolumeUp}}
 }
 
 // helpGroup is a titled list of bindings in the help overlay.

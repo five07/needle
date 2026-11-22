@@ -74,6 +74,25 @@ type Transport interface {
 	Clear(ctx context.Context) error
 }
 
+// Volume changes the software volume.
+type Volume interface {
+	// AdjustVolume changes the volume by delta percentage points and
+	// returns the new level, 0 to 100. It returns ErrVolumeOnDevice when
+	// the volume is set on the output device.
+	AdjustVolume(ctx context.Context, delta float64) (float64, error)
+}
+
+// ErrVolumeOnDevice means the volume is set on the DAC or amp: exclusive
+// mode with audio.volume = "device" (decision 84).
+var ErrVolumeOnDevice = errors.New("tui: volume is set on the output device")
+
+// VolumeStep is how far one volume key press moves the volume (decision 82).
+const VolumeStep = 5
+
+// VolumeOnDeviceNotice is shown when a volume key is pressed while the
+// volume is set on the output device.
+const VolumeOnDeviceNotice = "In exclusive mode, set the volume on your DAC or amp."
+
 // Timings and limits for the catalog views.
 const (
 	// SearchDebounce is how long typing must pause before a search starts.
@@ -101,6 +120,8 @@ type Services struct {
 	Visualizer Visualizer
 	// Settings, when set, makes the Settings rows editable and saved.
 	Settings SettingsService
+	// Volume, when set, is changed by the volume keys (decision 82).
+	Volume Volume
 	// Logger receives failures in full; the UI shows short messages.
 	Logger *slog.Logger
 	// Tick schedules fn after d. Default tea.Tick (tests replace it).
@@ -166,6 +187,27 @@ func userMessage(err error) string {
 		return "The playlist is full."
 	}
 	return "Something went wrong. See the log for details."
+}
+
+// volumeCmd moves the volume by delta and shows the new level.
+func (s *Services) volumeCmd(delta float64) tea.Cmd {
+	v, ctx := s.Volume, s.ctx()
+	if v == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(ctx, playbackTimeout)
+		defer cancel()
+		level, err := v.AdjustVolume(ctx, delta)
+		switch {
+		case errors.Is(err, ErrVolumeOnDevice):
+			return NoticeMsg{Text: VolumeOnDeviceNotice}
+		case err != nil:
+			s.logger().Warn("volume change failed", "err", err)
+			return NoticeMsg{Text: "Volume: " + userMessage(err)}
+		}
+		return NoticeMsg{Text: fmt.Sprintf("Volume %.0f%%", level)}
+	}
 }
 
 // playCmd replaces the queue with tracks and plays tracks[start].

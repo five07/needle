@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -29,10 +30,18 @@ type transport interface {
 	Status() player.Status
 }
 
+// volumer is the volume part of *player.Player (decisions 82 and 87).
+type volumer interface {
+	AdjustVolume(ctx context.Context, delta float64) (float64, error)
+	SetVolume(ctx context.Context, percent float64) error
+}
+
 // playback implements tui.Playback on the play queue and the player.
 type playback struct {
 	q *queue.Queue[player.Track]
 	p transport
+	// vol changes the software volume; nil means volume cannot change.
+	vol volumer
 	// changed, when set (capacity 1), is signaled after each queue edit
 	// so watchStatus sends a new snapshot.
 	changed chan struct{}
@@ -61,6 +70,18 @@ func (b *playback) SetAutoplay(ctx context.Context, on bool) error {
 		return b.p.QueueChanged(ctx)
 	}
 	return nil
+}
+
+// AdjustVolume implements tui.Volume.
+func (b *playback) AdjustVolume(ctx context.Context, delta float64) (float64, error) {
+	if b.vol == nil {
+		return 0, tui.ErrVolumeOnDevice
+	}
+	level, err := b.vol.AdjustVolume(ctx, delta)
+	if errors.Is(err, player.ErrVolumeDisabled) {
+		return level, tui.ErrVolumeOnDevice
+	}
+	return level, err
 }
 
 // addAutoplayed appends radio tracks as autoplayed entries, leaving out
@@ -365,6 +386,7 @@ func nowPlaying(st player.Status, s queue.Snapshot[player.Track], mode config.Au
 	if st.Output != nil && st.Output.Rate > 0 {
 		np.Output = shortFormat(st.Output.Bits(), st.Output.Rate)
 	}
+	np.Volume, np.HasVolume = int(math.Round(st.Volume)), true
 	if st.Source != nil && st.Indicator.Reason != "" {
 		np.Reason = st.Indicator.Reason
 		switch st.Indicator.State {

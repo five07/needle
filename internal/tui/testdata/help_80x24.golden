@@ -1,6 +1,5 @@
 ┌ needle ───────────────────────────────────────────────────── ? help ─ q quit ┐
 │                                                                              │
-│                                                                              │
 │      ╭────────────────────────────────────────────────────────────────╮      │
 │      │ Global                           Navigation                    │      │
 │      │ ?       toggle this help         k/↑     move up               │      │
@@ -17,8 +16,9 @@
 │      │ r       repeat off/all/one       Search                        │      │
 │      │ c       autoplay radio on/off    enter   search (in the input) │      │
 │      │ v       visualizer on/off                                      │      │
+│      │ -       volume down                                            │      │
+│      │ =       volume up                                              │      │
 │      ╰────────────────────────────────────────────────────────────────╯      │
-│                                                                              │
 │                                                                              │
 │ esc close help                                                               │
 └──────────────────────────────────────────────────────────────────────────────┘

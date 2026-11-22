@@ -302,6 +302,10 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 		return m.transport(actRepeat)
 	case key.Matches(k, Keys.Autoplay):
 		return m.transport(actAutoplay)
+	case key.Matches(k, Keys.VolumeDown):
+		return m.svc.volumeCmd(-VolumeStep)
+	case key.Matches(k, Keys.VolumeUp):
+		return m.svc.volumeCmd(VolumeStep)
 	case key.Matches(k, Keys.Visualizer):
 		if v := m.svc.Visualizer; v != nil {
 			v.SetOn(!v.On())

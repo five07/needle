@@ -123,6 +123,13 @@ func TestFormatLine(t *testing.T) {
 		{"preview", NowPlaying{Preview: true, Mode: "shared"}, "PREVIEW · shared"},
 		{"nothing known", NowPlaying{Mode: "shared"}, ""},
 		{"escape in reason", NowPlaying{Source: "FLAC", Quality: QualityAltered, Reason: "a\x1b[31mb"}, "FLAC · ⚠ ab"},
+		// Decision 86: the software volume shows only below 100%.
+		{"software volume", NowPlaying{Source: "FLAC 24/192", Output: "24/192", Mode: "exclusive", Quality: QualityAltered,
+			Reason: "software volume 70%", Volume: 70, HasVolume: true}, "FLAC 24/192 → out 24/192 · exclusive · ⚠ software volume 70% · vol 70%"},
+		{"full volume", NowPlaying{Source: "FLAC 24/192", Mode: "exclusive", Quality: QualityBitPerfect, Volume: 100, HasVolume: true},
+			"FLAC 24/192 · exclusive · ✓ bit-perfect"},
+		{"volume not known", NowPlaying{Source: "FLAC 24/192", Mode: "shared"}, "FLAC 24/192 · shared"},
+		{"muted", NowPlaying{Source: "FLAC", HasVolume: true}, "FLAC · vol 0%"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -104,6 +104,7 @@ Keys from the tasks are fixed. **(guess)** keys fill the gaps and avoid clashes.
 | 22 | `1`..`5` | Jump to sidebar entry **(guess)** | global | none | |
 | 23 | `?` | Help overlay | global | TASK-009 | |
 | 24 | `q` / `ctrl+c` | Quit (`q` types normally while in the search input) | global | TASK-009 | |
+| 25 | `-` / `=` | Volume down / up by 5% (software volume; a notice shows the level) | global | TASK-018 | Approved (Q82) |
 
 Global letter keys (`space`, `n`, `p`, `s`, `r`, `q`) are disabled while a text input has focus, so search text can include them. `esc` leaves the input.
 

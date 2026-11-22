@@ -5,10 +5,10 @@
 │   Queue       │   Quality          hires                                     │
 │   Account     │   Audio mode       exclusive                                 │
 │ ▸ Settings    │   Device           alsa/hw:CARD=DAC,DEV=0                    │
+│               │   Exclusive volume on the output device                      │
 │               │   Autoplay         on at start                               │
 │               │                                                              │
 │               │   Visualizer changes last for this session. Change the othe… │
-│               │                                                              │
 │               │                                                              │
 │               │                                                              │
 │               │                                                              │

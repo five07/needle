@@ -353,6 +353,7 @@ func TestNewUIErrors(t *testing.T) {
 	// The player starts the configured engine with the audio settings.
 	cfg = testConfig()
 	cfg.Audio.Device = "pipewire/dac"
+	cfg.Audio.Volume = config.VolumeSoftware
 	var got player.MPVConfig
 	d.newEngine = func(_ context.Context, c player.MPVConfig) (player.Engine, error) {
 		got = c
@@ -361,6 +362,9 @@ func TestNewUIErrors(t *testing.T) {
 	pc := playerConfig(d, cfg, nil, queue.New[player.Track](), discardLogger())
 	if _, err := pc.NewEngine(context.Background()); !errors.Is(err, player.ErrMPVNotFound) || got.Mode != cfg.Audio.Mode || got.Device != "pipewire/dac" || got.Logger == nil {
 		t.Errorf("engine config = %+v, err %v", got, err)
+	}
+	if pc.Volume != config.VolumeSoftware {
+		t.Errorf("volume control %q not passed to the player", pc.Volume)
 	}
 	// The default engine reports a missing mpv as a typed error.
 	d = defaultDeps
@@ -517,12 +521,13 @@ func TestNowPlaying(t *testing.T) {
 			Indicator: player.Assessment{State: player.Altered, Reason: "output format unknown"}},
 			tui.NowPlaying{Source: "FLAC 0 kHz", Quality: tui.QualityAltered, Reason: "output format unknown"}},
 		{"reason without a source", player.Status{Indicator: player.Assessment{State: player.BitPerfect, Reason: "x"}}, tui.NowPlaying{}},
+		{"software volume", player.Status{Volume: 69.6}, tui.NowPlaying{Volume: 70}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got := nowPlaying(tc.st, snap, config.AudioExclusive)
 			want := tc.want
-			want.Mode, want.Repeat = "exclusive", tui.RepeatAll
+			want.Mode, want.Repeat, want.HasVolume = "exclusive", tui.RepeatAll, true
 			want.Current = &tui.QueueItem{Handle: uint64(snap.Current.Handle), Track: tui.QueueTrack{ID: "1", Title: "One", Artists: "A", Album: "Al", Duration: time.Minute}}
 			want.Upcoming = []tui.QueueItem{{Handle: uint64(snap.Upcoming[0].Handle), Track: tui.QueueTrack{ID: "2"}}}
 			if !reflect.DeepEqual(got, want) {

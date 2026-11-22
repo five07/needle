@@ -23,7 +23,8 @@ var (
 	ErrOutputFailed = errors.New("player: the audio output could not be opened")
 	// ErrStreamFailed means the stream could not be loaded or broke mid-track.
 	ErrStreamFailed = errors.New("player: the stream could not be played")
-	// ErrVolumeDisabled means software volume is off in exclusive mode.
+	// ErrVolumeDisabled means software volume is off: exclusive mode with
+	// the volume on the output device (decision 84).
 	ErrVolumeDisabled = errors.New("player: volume is controlled on the output device in exclusive mode")
 )
 
@@ -102,8 +103,8 @@ type Engine interface {
 	ClearPreload(ctx context.Context) error
 	// SetPaused pauses or resumes playback.
 	SetPaused(ctx context.Context, paused bool) error
-	// SetVolume sets software volume (0-100). Exclusive mode returns
-	// ErrVolumeDisabled.
+	// SetVolume sets software volume (0-100). The Player decides whether
+	// software volume is allowed; the engine applies it in either mode.
 	SetVolume(ctx context.Context, percent float64) error
 	// Stop stops playback and drops any preloaded item.
 	Stop(ctx context.Context) error

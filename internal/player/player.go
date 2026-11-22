@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"time"
 
 	"github.com/five07/needle/internal/config"
@@ -59,7 +60,8 @@ type Status struct {
 	Output         *HWParams
 	Indicator      Assessment
 	Volume         float64
-	// VolumeEnabled is false in exclusive mode (volume is on the DAC/amp).
+	// VolumeEnabled reports whether software volume can be changed: false
+	// in exclusive mode unless the volume control is software (decision 84).
 	VolumeEnabled bool
 	// Message is a user-facing error or notice, empty when all is well.
 	Message string
@@ -75,7 +77,10 @@ type Status struct {
 
 // Config configures a Player.
 type Config struct {
-	Mode      config.AudioMode
+	Mode config.AudioMode
+	// Volume is how volume works in exclusive mode (decision 84). Empty
+	// means config.VolumeDevice.
+	Volume    config.VolumeControl
 	NewEngine func(ctx context.Context) (Engine, error)
 	Resolver  Resolver
 	Queue     *queue.Queue[Track]
@@ -126,6 +131,9 @@ type Player struct {
 	skipped      int // unavailable tracks skipped in a row (decision 58)
 	format       Event
 	st           Status
+	// volume is the software volume asked for, applied to each new engine
+	// while software volume is allowed (decision 85).
+	volume float64
 
 	// loaded, when set (tests only), is called after each resolve result is
 	// handled on the Run goroutine.
@@ -149,8 +157,9 @@ func New(cfg Config) *Player {
 		done:      make(chan struct{}),
 		manifests: map[queue.Handle]tidal.Manifest{},
 		resumed:   map[queue.Handle]bool{},
+		volume:    100,
 	}
-	p.st = Status{Volume: 100, VolumeEnabled: cfg.Mode != config.AudioExclusive, Mode: cfg.Mode}
+	p.st = Status{Volume: 100, VolumeEnabled: p.volumeAllowed(), Mode: cfg.Mode}
 	p.status.set(p.st)
 	return p
 }
@@ -282,17 +291,67 @@ func (p *Player) Stop(ctx context.Context) error {
 	return p.do(ctx, p.stop)
 }
 
-// SetVolume sets software volume (shared mode only).
+// SetVolume sets the software volume, 0 to 100. It returns
+// ErrVolumeDisabled when volume is on the output device (decision 84).
 func (p *Player) SetVolume(ctx context.Context, percent float64) error {
-	return p.do(ctx, func(rctx context.Context) error {
-		if p.cfg.Mode == config.AudioExclusive {
-			return ErrVolumeDisabled
-		}
-		if p.engine == nil {
-			return nil
-		}
-		return p.engine.SetVolume(rctx, percent)
+	if math.IsNaN(percent) || percent < 0 || percent > 100 {
+		return fmt.Errorf("player: volume %v is outside 0-100", percent)
+	}
+	return p.do(ctx, func(rctx context.Context) error { return p.setVolume(rctx, percent) })
+}
+
+// AdjustVolume changes the software volume by delta percentage points,
+// kept within 0 to 100, and returns the new level (decision 82). It
+// returns ErrVolumeDisabled when volume is on the output device.
+func (p *Player) AdjustVolume(ctx context.Context, delta float64) (float64, error) {
+	var level float64
+	err := p.do(ctx, func(rctx context.Context) error {
+		level = min(max(math.Round(p.volume+delta), 0), 100)
+		return p.setVolume(rctx, level)
 	})
+	return level, err
+}
+
+func (p *Player) setVolume(ctx context.Context, percent float64) error {
+	if !p.volumeAllowed() {
+		return ErrVolumeDisabled
+	}
+	p.volume, p.st.Volume = percent, percent
+	if p.engine == nil {
+		return nil
+	}
+	return p.engine.SetVolume(ctx, percent)
+}
+
+// SetVolumeControl changes how volume works in exclusive mode, without a
+// restart (decision 83). When software volume is no longer allowed, the
+// volume goes back to 100% so the output can be bit-perfect again.
+func (p *Player) SetVolumeControl(ctx context.Context, c config.VolumeControl) error {
+	return p.do(ctx, func(rctx context.Context) error {
+		p.cfg.Volume = c
+		return p.resetVolume(rctx)
+	})
+}
+
+// volumeAllowed reports whether software volume may be used: always in
+// shared mode, and in exclusive mode only when the control is software.
+func (p *Player) volumeAllowed() bool {
+	return p.cfg.Mode != config.AudioExclusive || p.cfg.Volume == config.VolumeSoftware
+}
+
+// resetVolume updates VolumeEnabled and returns the volume to 100% when
+// software volume is not allowed.
+func (p *Player) resetVolume(ctx context.Context) error {
+	p.st.VolumeEnabled = p.volumeAllowed()
+	if p.st.VolumeEnabled || p.volume == 100 {
+		return nil
+	}
+	p.volume, p.st.Volume = 100, 100
+	p.logger.Info("software volume reset to 100%", "track_id", p.trackID())
+	if p.engine == nil {
+		return nil
+	}
+	return p.engine.SetVolume(ctx, 100)
 }
 
 // ErrNoManifest means the player holds no manifest for that queue entry.
@@ -362,7 +421,12 @@ type Audio struct {
 func (p *Player) SetAudio(ctx context.Context, a Audio) error {
 	return p.do(ctx, func(rctx context.Context) error {
 		p.cfg.Mode, p.cfg.NewEngine, p.cfg.Prober = a.Mode, a.NewEngine, a.Prober
-		p.st.VolumeEnabled, p.st.Mode = a.Mode != config.AudioExclusive, a.Mode
+		p.st.Mode = a.Mode
+		if !p.volumeAllowed() {
+			// The new engine starts at 100%.
+			p.volume, p.st.Volume = 100, 100
+		}
+		p.st.VolumeEnabled = p.volumeAllowed()
 		p.format, p.st.Output, p.st.Indicator = Event{}, nil, Assessment{}
 		if p.engine == nil {
 			return nil
@@ -483,6 +547,12 @@ func (p *Player) ensureEngine(ctx context.Context) error {
 		return err
 	}
 	p.engine, p.events = e, e.Events()
+	if p.volume < 100 && p.volumeAllowed() {
+		// mpv starts at 100%: keep the level asked for (decision 85).
+		if err := e.SetVolume(ctx, p.volume); err != nil {
+			p.logger.Warn("restoring the volume failed", "track_id", p.trackID(), "err", err)
+		}
+	}
 	return nil
 }
 
@@ -697,7 +767,7 @@ func Message(err error) string {
 	case errors.Is(err, ErrEngineFailed), errors.Is(err, ErrIPCClosed):
 		return "The audio player stopped unexpectedly. Press play to restart it."
 	case errors.Is(err, ErrVolumeDisabled):
-		return "In exclusive mode, set the volume on your DAC or amp."
+		return "In exclusive mode, set the volume on your DAC or amp (or set audio.volume to software)."
 	}
 	return stream.Message(err)
 }

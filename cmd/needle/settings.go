@@ -21,8 +21,8 @@ const settleDelay = time.Second
 // stopper is a pending timer.
 type stopper interface{ Stop() bool }
 
-// settingsService implements tui.SettingsService. Quality, autoplay, and
-// the visualizer apply to the session at once; the audio mode and device
+// settingsService implements tui.SettingsService. Quality, autoplay, the
+// volume control, and the visualizer apply to the session at once; the audio mode and device
 // switch, and every save, wait for settleDelay without further changes.
 type settingsService struct {
 	path   string
@@ -34,6 +34,7 @@ type settingsService struct {
 	setQuality    func(config.Quality)
 	setAutoplay   func(bool)
 	setVisualizer func(bool)
+	setVolume     func(config.VolumeControl)
 	switchAudio   func(config.Audio)
 	devices       func(ctx context.Context, mode config.AudioMode) ([]player.Device, error)
 
@@ -67,6 +68,10 @@ func (s *settingsService) Apply(key string, value any) {
 	case "visualizer.enabled":
 		if s.setVisualizer != nil {
 			s.setVisualizer(on)
+		}
+	case "audio.volume":
+		if s.setVolume != nil {
+			s.setVolume(config.VolumeControl(str))
 		}
 	}
 	s.mu.Lock()

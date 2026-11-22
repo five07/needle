@@ -470,6 +470,47 @@ The scope was simplified: login stays in the terminal before the TUI starts (it 
     - b) Theme changes stay session-only until a separate "save" action.
     > MS: a, save on debounce
 
+### TASK-018 (volume control)
+
+Today the player has software volume in shared mode only (decision 20), but no key or mouse action ever calls it: the TUI has no volume keys, and MPRIS volume writes are refused (decision 57). The bar never shows the volume.
+
+82. **Volume keys (AC #2).** None exist yet, and `+` is taken by add to playlist.
+    - a) **(Recommended)** `-` and `=` lower and raise the volume by 5%, globally (disabled while typing in an input). Each press shows a notice in the hint line, "Volume 70%" (decision 25). When volume is on the output device, they show the existing notice "In exclusive mode, set the volume on your DAC or amp."
+    - b) `9` and `0`, as in mpv.
+    - c) `(` and `)`.
+    > MS: a
+
+83. **The setting (AC #1).**
+    - a) **(Recommended)** `[audio] volume = "device"` (default) or `"software"` in `config.toml`, also editable as a "Volume" row in Settings (`enter` cycles it, saved with the debounce of decision 76). It applies at once without restarting the engine, since mpv's software volume works with any output.
+    - b) Config only, not in Settings.
+    > MS: a
+
+84. **What "device" means in shared mode.** AC #1 says the default keeps v1 behavior, where shared mode already allows software volume.
+    - a) **(Recommended)** `device` is exactly v1: software volume in shared mode, none in exclusive mode. `software` adds software volume in exclusive mode too. The Settings row and README describe it as "Exclusive mode volume: on the output device / software".
+    - b) `device` turns software volume off in both modes, and `software` turns it on in both. Cleaner meaning, but it changes shared mode's default behavior.
+    > MS: a
+
+85. **Volume level at startup and when switching back.**
+    - a) **(Recommended)** Every start is at 100%, so playback starts bit-perfect. The level is not saved. Switching the setting back to `device` while in exclusive mode resets the volume to 100%.
+    - b) Remember the last level in the state directory, as the queue is.
+    > MS: a
+
+86. **Showing which behavior is active (AC #3).**
+    - a) **(Recommended)** The Settings row shows the choice. The now-playing bar shows `vol 70%` beside the indicator whenever software volume is below 100% (the indicator already says "altered", and its reason names the software volume). At 100% nothing is added, so the 80x24 layout is unchanged.
+    - b) As (a), and the bar always shows the volume, `vol DAC` when it is on the output device.
+    > MS: a
+
+87. **MPRIS volume writes (decision 57).**
+    - a) **(Recommended)** Writes set the software volume whenever the volume keys would work, and are refused as today otherwise. The reported value follows the real volume.
+    - b) Keep them read-only.
+    > MS: a
+
+88. **ALSA hardware volume (AC #4).** Your Schiit Vestri has only a mute switch (doc-003), so a DAC mixer cannot be tested on this machine. A USB Audio Class DAC with a volume control applies it inside the DAC (a Feature Unit), so the samples sent over USB are unchanged.
+    - a) **(Recommended)** Evaluate and document only: a backlog doc covering how needle would find the mixer element (`/proc/asound` and the ALSA mixer via `amixer`, which adds a runtime dependency on alsa-utils), why it keeps the USB stream bit-perfect, the risks (DACs that only fake a volume control, dB scales), and how to test it with a DAC that has one. The README gets one line. No code. AC #4 is checked against that doc.
+    - b) Also build a third choice, `volume = "hardware"`, through `amixer`, tested only with fakes until a suitable DAC is available.
+    - c) Move AC #4 to its own spike ticket for when such a DAC is available.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -590,6 +631,13 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 79 | Mode and device live | Applied at once: needle closes the audio engine and starts one with the new mode and device, resuming the current track at its position (paused stays paused). A short gap is expected. A busy or failing device shows the usual playback error. |
 | 80 | Choosing mode and device | `enter` cycles quality and mode. `enter` on Device opens a picker of the devices `-list-devices` shows for the mode (`auto` first in shared mode, the current one marked). Switching to shared resets the device to `auto`. Switching to exclusive opens the picker at once, and the mode changes only with a device picked (`esc` cancels). The engine switch and the save wait for 1 s without further changes (debounce), so cycling does not restart the engine for each step. |
 | 81 | Visualizer theme saving | Theme and visualizer on/off from the Settings rows are saved with the same debounce. `visualizer.custom` stays config-only. |
+| 82 | Volume keys | `-` and `=` change the software volume by 5%, globally (not while typing), with a "Volume 70%" notice. With the volume on the output device they show "In exclusive mode, set the volume on your DAC or amp." |
+| 83 | Volume setting | `[audio] volume = "device"` (default) or `"software"`, also the "Exclusive volume" row in Settings, saved with the debounce. Applies at once, without an engine restart. |
+| 84 | Meaning of `device` | Exactly v1 (decision 20): software volume in shared mode, none in exclusive mode. `software` adds software volume in exclusive mode. |
+| 85 | Volume level | Every start is at 100%; the level is not saved. It is kept across engine restarts while software volume is allowed. Back to `device` in exclusive mode resets it to 100%. |
+| 86 | Showing the volume | The Settings row shows the choice; the bar adds `vol 70%` after the indicator only below 100%. |
+| 87 | MPRIS volume | Writes set the software volume (clamped to 0-1) wherever the volume keys work, and are refused with NotSupported otherwise. Replaces decision 57. |
+| 88 | ALSA hardware volume | Evaluated and documented only (backlog doc-004, README); no code. |
 
 ## Definition of Done
 

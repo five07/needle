@@ -147,10 +147,10 @@ func screen(m *Model) string { return ansi.Strip(m.render()) }
 // to apply and save.
 func TestSettingsRowsApply(t *testing.T) {
 	_, m, fs, vis := newSettingsEnv(t)
-	drive(m, press("enter"))                                     // visualizer
-	drive(m, press("j"), press("enter"))                         // theme
-	n := drive(m, press("j"), press("enter"))                    // quality
-	drive(m, press("j"), press("j"), press("j"), press("enter")) // autoplay
+	drive(m, press("enter"))                                                 // visualizer
+	drive(m, press("j"), press("enter"))                                     // theme
+	n := drive(m, press("j"), press("enter"))                                // quality
+	drive(m, press("j"), press("j"), press("j"), press("j"), press("enter")) // autoplay
 	want := []applied{{"visualizer.enabled", true}, {"visualizer.theme", "forest green"}, {"quality", "aac"}, {"autoplay", true}}
 	if !reflect.DeepEqual(fs.applied, want) {
 		t.Errorf("applied %v", fs.applied)
@@ -255,6 +255,40 @@ func TestDevicePickerProblems(t *testing.T) {
 	}
 }
 
+// TASK-018 AC #1, #3: the Exclusive volume row shows the volume control
+// and cycles it, saved like the other rows (decision 83).
+func TestSettingsVolumeRow(t *testing.T) {
+	_, m, fs, _ := newSettingsEnv(t)
+	if out := screen(m); !strings.Contains(out, "Exclusive volume on the output device") {
+		t.Fatalf("unset volume control:\n%s", out)
+	}
+	for range setVolume {
+		drive(m, press("j"))
+	}
+	drive(m, press("enter"))
+	if out := screen(m); !strings.Contains(out, "Exclusive volume software") {
+		t.Errorf("after enter:\n%s", out)
+	}
+	drive(m, press("enter"))
+	want := []applied{{"audio.volume", "software"}, {"audio.volume", "device"}}
+	if !reflect.DeepEqual(fs.applied, want) {
+		t.Errorf("applied %v", fs.applied)
+	}
+	// Without a settings service the row is read-only.
+	e := newEnv(t)
+	info := testSettings
+	info.Volume = "software"
+	ro := New(Config{Services: e.svc, Settings: NewSettingsView(e.svc, info)})
+	drive(ro, tea.WindowSizeMsg{Width: 80, Height: 24}, press("6"), press("l"))
+	for range setVolume {
+		drive(ro, press("j"))
+	}
+	n := drive(ro, press("enter"))
+	if out := screen(ro); !strings.Contains(out, "Exclusive volume software") || len(n) != 1 || !strings.Contains(n[0], "config.toml") {
+		t.Errorf("read-only: %v\n%s", n, out)
+	}
+}
+
 func TestSettingsAndPickerMouse(t *testing.T) {
 	_, m, fs, _ := newSettingsEnv(t)
 	main := m.layout.Main
@@ -263,7 +297,7 @@ func TestSettingsAndPickerMouse(t *testing.T) {
 	if len(fs.applied) != 1 || fs.applied[0].key != "autoplay" {
 		t.Fatalf("double click: %v", fs.applied)
 	}
-	drive(m, press("k"), press("enter")) // device picker
+	drive(m, press("k"), press("k"), press("enter")) // device picker
 	drive(m, tea.MouseWheelMsg{X: main.X + 3, Y: main.Y + 3, Button: tea.MouseWheelDown})
 	drive(m, tea.MouseClickMsg{X: main.X + 3, Y: main.Y + 3, Button: tea.MouseLeft})
 	drive(m, tea.MouseClickMsg{X: main.X + 3, Y: main.Y + 3, Button: tea.MouseLeft})

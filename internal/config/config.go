@@ -54,6 +54,20 @@ const (
 // DefaultAudioDevice selects the system default output device.
 const DefaultAudioDevice = "auto"
 
+// VolumeControl selects how volume works in exclusive mode (decisions 83
+// and 84).
+type VolumeControl string
+
+// Supported volume controls.
+const (
+	// VolumeDevice leaves volume to the output device (the DAC or amp) in
+	// exclusive mode. Shared mode keeps software volume.
+	VolumeDevice VolumeControl = "device"
+	// VolumeSoftware allows software volume in exclusive mode too. Below
+	// 100% the samples change, so the output is no longer bit-perfect.
+	VolumeSoftware VolumeControl = "software"
+)
+
 // Config is the validated application configuration.
 type Config struct {
 	Quality Quality `toml:"quality"`
@@ -90,6 +104,8 @@ type Audio struct {
 	Mode AudioMode `toml:"mode"`
 	// Device is an mpv audio device name, or "auto" for the system default.
 	Device string `toml:"device"`
+	// Volume is device or software (decision 83).
+	Volume VolumeControl `toml:"volume"`
 }
 
 // Auth holds OAuth settings.
@@ -120,7 +136,7 @@ func Defaults(getenv func(string) string) Config {
 	}
 	return Config{
 		Quality:    QualityHiRes,
-		Audio:      Audio{Mode: AudioShared, Device: DefaultAudioDevice},
+		Audio:      Audio{Mode: AudioShared, Device: DefaultAudioDevice, Volume: VolumeDevice},
 		Visualizer: Visualizer{Theme: "terminal"},
 		Auth:       Auth{ClientID: clientID},
 	}
@@ -166,6 +182,11 @@ func (c Config) Validate() error {
 	case AudioShared, AudioExclusive:
 	default:
 		return &ValidationError{Key: "audio.mode", Reason: fmt.Sprintf("%q is not one of shared, exclusive", c.Audio.Mode)}
+	}
+	switch c.Audio.Volume {
+	case VolumeDevice, VolumeSoftware:
+	default:
+		return &ValidationError{Key: "audio.volume", Reason: fmt.Sprintf("%q is not one of device, software", c.Audio.Volume)}
 	}
 	if c.Audio.Device == "" {
 		return &ValidationError{Key: "audio.device", Reason: `must not be empty (use "auto" for the system default)`}

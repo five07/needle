@@ -25,7 +25,7 @@ func writeConfig(t *testing.T, body string) string {
 func TestLoad(t *testing.T) {
 	defaults := Config{
 		Quality: QualityHiRes,
-		Audio:   Audio{Mode: AudioShared, Device: DefaultAudioDevice},
+		Audio:   Audio{Mode: AudioShared, Device: DefaultAudioDevice, Volume: VolumeDevice},
 	}
 
 	tests := []struct {
@@ -55,6 +55,7 @@ autoplay = true
 [audio]
 mode = "exclusive"
 device = "alsa/hw:1,0"
+volume = "software"
 
 [auth]
 client_id = "abc_DEF-123.x"
@@ -62,7 +63,7 @@ client_id = "abc_DEF-123.x"
 			want: Config{
 				Quality:  QualityLossless,
 				Autoplay: true,
-				Audio:    Audio{Mode: AudioExclusive, Device: "alsa/hw:1,0"},
+				Audio:    Audio{Mode: AudioExclusive, Device: "alsa/hw:1,0", Volume: VolumeSoftware},
 				Auth:     Auth{ClientID: "abc_DEF-123.x"},
 			},
 		},
@@ -119,7 +120,7 @@ custom = ["#000000", "#112233", "#AbCdEf", "#ffffff"]
 		{
 			name: "values are trimmed",
 			body: new("[audio]\ndevice = \"  pipewire  \"\n[auth]\nclient_id = \" id \"\n"),
-			want: Config{Quality: QualityHiRes, Audio: Audio{Mode: AudioShared, Device: "pipewire"}, Auth: Auth{ClientID: "id"}},
+			want: Config{Quality: QualityHiRes, Audio: Audio{Mode: AudioShared, Device: "pipewire", Volume: VolumeDevice}, Auth: Auth{ClientID: "id"}},
 		},
 		{
 			name:    "invalid quality",
@@ -130,6 +131,11 @@ custom = ["#000000", "#112233", "#AbCdEf", "#ffffff"]
 			name:    "invalid audio mode",
 			body:    new("[audio]\nmode = \"loud\"\n"),
 			wantKey: "audio.mode",
+		},
+		{
+			name:    "invalid volume control",
+			body:    new("[audio]\nvolume = \"hardware\"\n"),
+			wantKey: "audio.volume",
 		},
 		{
 			name:    "empty audio device",
@@ -173,8 +179,8 @@ custom = ["#000000", "#112233", "#AbCdEf", "#ffffff"]
 		},
 		{
 			name:    "unknown nested key",
-			body:    new("[audio]\nvolume = 50\n"),
-			wantKey: "audio.volume",
+			body:    new("[audio]\ngain = 50\n"),
+			wantKey: "audio.gain",
 		},
 		{
 			name:       "wrong value type names the key",

@@ -58,6 +58,7 @@ type settingsEnv struct {
 	qualites []config.Quality
 	autoplay []bool
 	vis      []bool
+	volumes  []config.VolumeControl
 	switches []config.Audio
 }
 
@@ -78,6 +79,7 @@ func newSettingsEnv(t *testing.T, body string) *settingsEnv {
 	e.s.setQuality = func(q config.Quality) { e.qualites = append(e.qualites, q) }
 	e.s.setAutoplay = func(on bool) { e.autoplay = append(e.autoplay, on) }
 	e.s.setVisualizer = func(on bool) { e.vis = append(e.vis, on) }
+	e.s.setVolume = func(c config.VolumeControl) { e.volumes = append(e.volumes, c) }
 	e.s.switchAudio = func(a config.Audio) { e.switches = append(e.switches, a) }
 	return e
 }
@@ -114,6 +116,28 @@ func TestSettingsApplyNowSaveLater(t *testing.T) {
 	}
 	if len(e.switches) != 0 || len(e.notices) != 0 {
 		t.Errorf("switches %v notices %v", e.switches, e.notices)
+	}
+}
+
+// TASK-018 decision 83: the volume control applies at once, without an
+// engine switch, and is saved after the changes settle.
+func TestSettingsVolumeControl(t *testing.T) {
+	e := newSettingsEnv(t, "[audio]\nmode = \"exclusive\" # my DAC\ndevice = \"alsa/hw:4\"\n")
+	e.s.Apply("audio.volume", "software")
+	if !reflect.DeepEqual(e.volumes, []config.VolumeControl{config.VolumeSoftware}) {
+		t.Fatalf("session: %v", e.volumes)
+	}
+	e.timer.fire(t)
+	want := "[audio]\nmode = \"exclusive\" # my DAC\ndevice = \"alsa/hw:4\"\nvolume = \"software\"\n"
+	if got := e.file(t); got != want || len(e.switches) != 0 {
+		t.Errorf("saved:\n%s\nswitches %v", got, e.switches)
+	}
+	// Without the hook (tests, or no player) it is still saved.
+	e.s.setVolume = nil
+	e.s.Apply("audio.volume", "device")
+	e.timer.fire(t)
+	if !strings.Contains(e.file(t), `volume = "device"`) {
+		t.Errorf("saved:\n%s", e.file(t))
 	}
 }
 
@@ -284,7 +308,7 @@ func pressAll(m tea.Model, keys ...string) {
 	}
 }
 
-// End to end (AC #1, #3, #5, #6): rows changed in the Settings section are
+// End to end (AC #1, #3, #5, #6, and TASK-018 AC #1): rows changed in the Settings section are
 // saved to config.toml, keeping its comments. (The live engine switch is
 // tested in the player package; here nothing plays.)
 func TestSettingsSavedFromTheUI(t *testing.T) {
@@ -301,9 +325,10 @@ func TestSettingsSavedFromTheUI(t *testing.T) {
 		t.Fatal(err)
 	}
 	model.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	pressAll(model, "6", "l", "enter", "j", "enter", "j", "enter", "j", "j", "j", "enter") // visualizer, theme, quality, autoplay
-	pressAll(model, "k", "enter")                                                          // the device picker
-	pressAll(model, "j", "enter")                                                          // the PipeWire sink
+	pressAll(model, "6", "l", "enter", "j", "enter", "j", "enter") // visualizer, theme, quality
+	pressAll(model, "j", "j", "j", "enter", "j", "enter")          // volume control (TASK-018), autoplay
+	pressAll(model, "k", "k", "enter")                             // the device picker
+	pressAll(model, "j", "enter")                                  // the PipeWire sink
 	// The audio switch and the save wait for the changes to settle.
 	deadline := time.Now().Add(3 * time.Second)
 	for !strings.Contains(readConfig(t, path), "device") {
@@ -313,7 +338,7 @@ func TestSettingsSavedFromTheUI(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	stop()
-	want := "# mine\nquality = \"aac\" # keep\nautoplay = true\n\n[visualizer]\nenabled = true\ntheme = \"burnt orange\"\n\n[audio]\ndevice = \"pipewire/alsa_output.usb-x\"\n"
+	want := "# mine\nquality = \"aac\" # keep\nautoplay = true\n\n[visualizer]\nenabled = true\ntheme = \"burnt orange\"\n\n[audio]\nvolume = \"software\"\ndevice = \"pipewire/alsa_output.usb-x\"\n"
 	if got := readConfig(t, path); got != want {
 		t.Errorf("saved:\n%s\nwant:\n%s", got, want)
 	}

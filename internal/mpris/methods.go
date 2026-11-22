@@ -2,6 +2,8 @@ package mpris
 
 import (
 	"context"
+	"errors"
+	"math"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -58,11 +60,32 @@ func (s *Service) onLoop(ch *prop.Change) *dbus.Error {
 	return s.call("SetLoop", func(ctx context.Context) error { return s.controls.SetLoop(ctx, l) })
 }
 
-// onVolume ignores writes until TASK-018 decides how volume works
-// (decision 57). Returning an error keeps the stored value unchanged.
+// errVolumeNotSupported answers a Volume write while the volume is set on
+// the output device.
+var errVolumeNotSupported = dbus.NewError("org.freedesktop.DBus.Error.NotSupported", []any{"needle: volume is set on the output device"})
+
+// onVolume sets the software volume (decision 87). Values below 0 count as
+// 0, as the spec says, and values above 1 as 1, since needle never adds
+// gain. Returning an error keeps the stored value unchanged.
 func (s *Service) onVolume(ch *prop.Change) *dbus.Error {
-	s.logger.Debug("mpris volume write ignored", "value", ch.Value)
-	return dbus.NewError("org.freedesktop.DBus.Error.NotSupported", []any{"needle: volume is read-only"})
+	v, _ := ch.Value.(float64) // prop rejects other types before calling
+	if math.IsNaN(v) {
+		return prop.ErrInvalidArg
+	}
+	v = min(max(v, 0), 1)
+	s.volumeStale.Store(true)
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	err := s.controls.SetVolume(ctx, v)
+	switch {
+	case errors.Is(err, ErrVolumeNotSupported):
+		s.logger.Debug("mpris volume write refused: volume is on the output device", "value", v)
+		return errVolumeNotSupported
+	case err != nil:
+		s.logger.Warn("mpris control failed", "method", "SetVolume", "err", err)
+		return errFailed
+	}
+	return nil
 }
 
 func introspectMethods(names ...string) []introspect.Method {

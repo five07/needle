@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -84,6 +85,10 @@ type NowPlaying struct {
 	Repeat  RepeatMode
 	// Autoplay is on: the queue continues with radio when it ends.
 	Autoplay bool
+	// Volume is the software volume in percent, shown in the bar below
+	// 100 (decision 86). It is known only when HasVolume is set.
+	Volume    int
+	HasVolume bool
 	// Best is the highest quality TIDAL has delivered, for example
 	// "FLAC 24/192", and BestSeen when it first arrived (TASK-014).
 	Best     string
@@ -287,6 +292,9 @@ func formatLine(np NowPlaying, w int) string {
 		segs = append(segs, seg{"✓ rate matched", styleGood.Render})
 	case QualityAltered:
 		segs = append(segs, seg{"⚠ " + Sanitize(np.Reason), styleWarn.Render})
+	}
+	if np.HasVolume && np.Volume < 100 {
+		segs = append(segs, seg{fmt.Sprintf("vol %d%%", max(np.Volume, 0)), plain})
 	}
 	if len(segs) == 0 {
 		return strings.Repeat(" ", w)

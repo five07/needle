@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"os/exec"
 	"reflect"
 	"strings"
@@ -84,6 +86,9 @@ func (f *fakeControls) SetShuffle(_ context.Context, on bool) error {
 	return f.rec("Shuffle off")
 }
 func (f *fakeControls) SetLoop(_ context.Context, l Loop) error { return f.rec("Loop " + string(l)) }
+func (f *fakeControls) SetVolume(_ context.Context, v float64) error {
+	return f.rec(fmt.Sprintf("Volume %.2f", v))
+}
 
 type env struct {
 	svc    *Service
@@ -225,6 +230,44 @@ func TestMethods(t *testing.T) {
 	}
 }
 
+// TASK-018 decision 87: Volume writes set the software volume, clamped to
+// 0-1, and are refused with NotSupported while the volume is on the
+// output device.
+func TestVolumeWrites(t *testing.T) {
+	e := newEnv(t)
+	e.svc.Update(State{Volume: 1})
+	set := func(v any) error {
+		return e.obj.Call("org.freedesktop.DBus.Properties.Set", 0, ifacePlayer, "Volume", dbus.MakeVariant(v)).Err
+	}
+	for _, v := range []float64{0.5, -0.2, 1.5} {
+		if err := set(v); err != nil {
+			t.Errorf("set %v: %v", v, err)
+		}
+	}
+	if got, want := e.ctl.got(), []string{"Volume 0.50", "Volume 0.00", "Volume 1.00"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("controls %v, want %v", got, want)
+	}
+	// The next Update publishes the real volume, even when it is the same
+	// as the last one published (1.5 was stored, 1 is real).
+	e.svc.Update(State{Volume: 1})
+	if v := e.get(t, ifacePlayer, "Volume"); v != 1.0 {
+		t.Errorf("volume %v after update", v)
+	}
+	n := len(e.ctl.got())
+	if set("loud") == nil || set(math.NaN()) == nil || len(e.ctl.got()) != n {
+		t.Error("bad values accepted")
+	}
+	e.ctl.fail(ErrVolumeNotSupported)
+	var derr dbus.Error
+	if err := set(0.3); !errors.As(err, &derr) || derr.Name != "org.freedesktop.DBus.Error.NotSupported" {
+		t.Errorf("on the device: %v", err)
+	}
+	e.ctl.fail(errors.New("ipc"))
+	if err := set(0.3); !errors.As(err, &derr) || derr.Name != "org.freedesktop.DBus.Error.Failed" {
+		t.Errorf("failure: %v", err)
+	}
+}
+
 func TestWritableProperties(t *testing.T) {
 	e := newEnv(t)
 	set := func(name string, v any) error {
@@ -241,7 +284,6 @@ func TestWritableProperties(t *testing.T) {
 		{"LoopStatus", "Playlist", true},
 		{"LoopStatus", "None", true},
 		{"LoopStatus", "Sometimes", false},
-		{"Volume", 0.5, false}, // read-only until TASK-018
 		{"CanSeek", true, false},
 	} {
 		if err := set(step.name, step.v); (err == nil) != step.ok {
@@ -250,9 +292,6 @@ func TestWritableProperties(t *testing.T) {
 	}
 	if got, want := e.ctl.got(), []string{"Shuffle on", "Shuffle off", "Loop Track", "Loop Playlist", "Loop None"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("controls %v, want %v", got, want)
-	}
-	if v := e.get(t, ifacePlayer, "Volume"); v != 1.0 {
-		t.Errorf("volume changed to %v", v)
 	}
 	// A failing control rejects the write.
 	e.ctl.fail(errors.New("boom"))

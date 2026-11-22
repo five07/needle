@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@claude'
 created_date: '2026-11-22T15:06:38Z'
-updated_date: '2026-11-22T18:24:13Z'
+updated_date: '2026-11-22T20:12:34Z'
 labels:
   - chore
   - post-mvp
@@ -36,7 +36,7 @@ The product name `tidal-tui` puts the TIDAL trademark in the project name, which
 - [x] #6 No code reads the old `tidal-tui` paths or keyring entry (no migration)
 - [x] #7 README says once under the intro: "needle is an independent project and is not affiliated with or endorsed by TIDAL.", and `-version` prints the same line
 - [x] #8 README, UI.md, the PLAN.md Definition of Done, and the backlog project name and Definition of Done use `needle`
-- [ ] #9 A grep for `tidal-tui` outside history (completed tasks, PLAN.md questions and decisions) finds nothing
+- [x] #9 A grep for `tidal-tui` outside history (completed tasks, PLAN.md questions and decisions) finds nothing
 <!-- AC:END -->
 
 ## Definition of Done

@@ -245,7 +245,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, cl
 	}()
 	notices := make(chan string, 4)
 	status := make(chan tui.NowPlaying, 1)
-	pb := &playback{q: q, p: p, changed: make(chan struct{}, 1)}
+	pb := &playback{q: q, p: p, vol: p, changed: make(chan struct{}, 1)}
 	pb.autoplay.Store(cfg.Autoplay)
 	var best *bestQuality
 	if stateDir != "" {
@@ -268,7 +268,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, cl
 	}
 	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified}
 	settings := tui.SettingsInfo{Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device,
-		Autoplay: cfg.Autoplay, Visualizer: cfg.Visualizer.Enabled, Theme: cfg.Visualizer.Theme, Custom: cfg.Visualizer.Custom, Themes: config.VisualizerThemes}
+		Volume: string(cfg.Audio.Volume), Autoplay: cfg.Autoplay, Visualizer: cfg.Visualizer.Enabled, Theme: cfg.Visualizer.Theme, Custom: cfg.Visualizer.Custom, Themes: config.VisualizerThemes}
 
 	settingsSvc := newSettingsService(configPath, cfg.Audio, logger, func(text string) {
 		select {
@@ -291,6 +291,11 @@ func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, cl
 		}
 	}
 	settingsSvc.setVisualizer = vis.SetOn
+	settingsSvc.setVolume = func(c config.VolumeControl) {
+		if err := p.SetVolumeControl(uiCtx, c); err != nil && uiCtx.Err() == nil {
+			logger.Warn("volume control not changed", "volume", c, "err", err)
+		}
+	}
 	settingsSvc.switchAudio = func(a config.Audio) {
 		if err := p.SetAudio(uiCtx, audioFor(d, a, logger)); err != nil && uiCtx.Err() == nil {
 			logger.Warn("audio output not switched", "mode", a.Mode, "err", err)
@@ -299,7 +304,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, cl
 	settingsSvc.devices = listDevices(d)
 
 	svc := &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
-		Playback: pb, Transport: pb, Visualizer: vis, Settings: settingsSvc, Logger: logger}
+		Playback: pb, Transport: pb, Volume: pb, Visualizer: vis, Settings: settingsSvc, Logger: logger}
 	model = tui.New(tui.Config{
 		Services:  svc,
 		Account:   tui.NewAccountView(svc, acct),
@@ -381,6 +386,7 @@ func playerConfig(d deps, cfg config.Config, r player.Resolver, q *queue.Queue[p
 	a := audioFor(d, cfg.Audio, logger)
 	return player.Config{
 		Mode:      a.Mode,
+		Volume:    cfg.Audio.Volume,
 		NewEngine: a.NewEngine,
 		Resolver:  r,
 		Queue:     q,

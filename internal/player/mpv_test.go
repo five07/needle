@@ -297,7 +297,9 @@ func TestMPVVolume(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ex.SetVolume(ctx, 40); !errors.Is(err, ErrVolumeDisabled) {
+	// The Player decides whether software volume is allowed (decision 84);
+	// the engine applies it in exclusive mode too.
+	if err := ex.SetVolume(ctx, 40); err != nil {
 		t.Errorf("exclusive SetVolume err = %v", err)
 	}
 }

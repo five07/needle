@@ -5,11 +5,13 @@ package mpris
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/godbus/dbus/v5"
@@ -92,7 +94,14 @@ type Controls interface {
 	Previous(ctx context.Context) error
 	SetShuffle(ctx context.Context, on bool) error
 	SetLoop(ctx context.Context, l Loop) error
+	// SetVolume sets the volume, 0 to 1. It returns ErrVolumeNotSupported
+	// when the volume is set on the output device (decision 87).
+	SetVolume(ctx context.Context, v float64) error
 }
+
+// ErrVolumeNotSupported means volume cannot be changed from here: it is set
+// on the output device. MPRIS callers get NotSupported.
+var ErrVolumeNotSupported = errors.New("mpris: volume is set on the output device")
 
 // Service is the player's presence on the bus. Its methods are safe for
 // concurrent use.
@@ -105,6 +114,10 @@ type Service struct {
 
 	mu   sync.Mutex
 	last State
+	// volumeStale is set after a Volume write, so the next Update publishes
+	// the real volume even when it did not change (a clamped or refused
+	// write leaves the written value stored).
+	volumeStale atomic.Bool
 }
 
 // Start exports the MPRIS objects on conn and takes the bus name. The
@@ -189,7 +202,7 @@ func (s *Service) propMap() prop.Map {
 			"Rate":           ro(1.0),
 			"Shuffle":        {Value: false, Writable: true, Emit: prop.EmitTrue, Callback: s.onShuffle},
 			"Metadata":       ro(metadata(nil)),
-			// Volume writes are ignored until TASK-018 (decision 57).
+			// Volume writes set the software volume when allowed (decision 87).
 			"Volume":        {Value: 1.0, Writable: true, Emit: prop.EmitTrue, Callback: s.onVolume},
 			"Position":      {Value: int64(0), Emit: prop.EmitFalse}, // read when asked, per the spec
 			"MinimumRate":   ro(1.0),
@@ -230,7 +243,7 @@ func (s *Service) Update(st State) {
 	if old.Loop != st.Loop {
 		set("LoopStatus", string(st.Loop))
 	}
-	if old.Volume != st.Volume {
+	if s.volumeStale.Swap(false) || old.Volume != st.Volume {
 		set("Volume", st.Volume)
 	}
 	has := st.Track != nil

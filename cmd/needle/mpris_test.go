@@ -19,6 +19,60 @@ import (
 	"github.com/godbus/dbus/v5"
 )
 
+// stubVolume records volume calls and returns err.
+type stubVolume struct {
+	set    []float64
+	deltas []float64
+	err    error
+}
+
+func (v *stubVolume) AdjustVolume(_ context.Context, d float64) (float64, error) {
+	v.deltas = append(v.deltas, d)
+	return 95, v.err
+}
+func (v *stubVolume) SetVolume(_ context.Context, p float64) error {
+	v.set = append(v.set, p)
+	return v.err
+}
+
+// TASK-018: the volume keys and MPRIS reach the player, and a refusal
+// (volume on the output device) becomes each side's own error.
+func TestVolumeControls(t *testing.T) {
+	ctx := context.Background()
+	vol := &stubVolume{}
+	b := &playback{q: queue.New[player.Track](), p: &stubTransport{}, vol: vol}
+	if level, err := b.AdjustVolume(ctx, -5); err != nil || level != 95 {
+		t.Errorf("adjust: %v %v", level, err)
+	}
+	c := mprisControls{b}
+	if err := c.SetVolume(ctx, 0.426); err != nil || !reflect.DeepEqual(vol.set, []float64{43}) {
+		t.Errorf("mpris: %v %v", err, vol.set)
+	}
+	vol.err = player.ErrVolumeDisabled
+	if _, err := b.AdjustVolume(ctx, 5); !errors.Is(err, tui.ErrVolumeOnDevice) {
+		t.Errorf("adjust on the device: %v", err)
+	}
+	if err := c.SetVolume(ctx, 0.5); !errors.Is(err, mpris.ErrVolumeNotSupported) {
+		t.Errorf("mpris on the device: %v", err)
+	}
+	other := errors.New("ipc")
+	vol.err = other
+	if _, err := b.AdjustVolume(ctx, 5); !errors.Is(err, other) {
+		t.Errorf("adjust failure: %v", err)
+	}
+	if err := c.SetVolume(ctx, 0.5); !errors.Is(err, other) {
+		t.Errorf("mpris failure: %v", err)
+	}
+	// Without a player volume, both refuse.
+	none := &playback{q: queue.New[player.Track](), p: &stubTransport{}}
+	if _, err := none.AdjustVolume(ctx, 5); !errors.Is(err, tui.ErrVolumeOnDevice) {
+		t.Errorf("no volume: %v", err)
+	}
+	if err := (mprisControls{none}).SetVolume(ctx, 0.5); !errors.Is(err, mpris.ErrVolumeNotSupported) {
+		t.Errorf("no volume over mpris: %v", err)
+	}
+}
+
 func TestMPRISControls(t *testing.T) {
 	ctx := context.Background()
 	q := queue.New[player.Track]()

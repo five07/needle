@@ -24,6 +24,7 @@ var editable = map[string]bool{ // true: bool, false: string
 	"autoplay":           true,
 	"audio.mode":         false,
 	"audio.device":       false,
+	"audio.volume":       false,
 	"visualizer.enabled": true,
 	"visualizer.theme":   false,
 }
@@ -136,6 +137,8 @@ func valueOf(c Config, key string) any {
 		return string(c.Audio.Mode)
 	case "audio.device":
 		return c.Audio.Device
+	case "audio.volume":
+		return string(c.Audio.Volume)
 	case "visualizer.enabled":
 		return c.Visualizer.Enabled
 	default: // "visualizer.theme"; Edit checks the key

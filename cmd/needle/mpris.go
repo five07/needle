@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"math"
 
 	"github.com/five07/needle/internal/mpris"
 	"github.com/five07/needle/internal/player"
@@ -39,6 +41,18 @@ func (c mprisControls) SetShuffle(ctx context.Context, on bool) error {
 func (c mprisControls) SetLoop(ctx context.Context, l mpris.Loop) error {
 	r := map[mpris.Loop]queue.Repeat{mpris.LoopNone: queue.RepeatOff, mpris.LoopTrack: queue.RepeatOne, mpris.LoopPlaylist: queue.RepeatAll}[l]
 	return c.b.SetRepeat(ctx, r)
+}
+
+// SetVolume sets the software volume from MPRIS (0 to 1, decision 87).
+func (c mprisControls) SetVolume(ctx context.Context, v float64) error {
+	if c.b.vol == nil {
+		return mpris.ErrVolumeNotSupported
+	}
+	err := c.b.vol.SetVolume(ctx, math.Round(v*100))
+	if errors.Is(err, player.ErrVolumeDisabled) {
+		return mpris.ErrVolumeNotSupported
+	}
+	return err
 }
 
 // mprisState converts a UI snapshot and the player volume for MPRIS.

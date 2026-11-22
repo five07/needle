@@ -31,7 +31,9 @@ type SettingsInfo struct {
 	Quality     string
 	AudioMode   string
 	AudioDevice string
-	Autoplay    bool
+	// Volume is audio.volume, "device" or "software" (decision 83).
+	Volume   string
+	Autoplay bool
 	// Visualizer is visualizer.enabled.
 	Visualizer bool
 	// Theme and Custom are the visualizer theme; Themes lists the choices
@@ -44,6 +46,12 @@ type SettingsInfo struct {
 // Qualities is the order enter cycles the quality in.
 var Qualities = []string{"aac", "lossless", "hires"}
 
+// VolumeControls is the order enter cycles audio.volume in.
+var VolumeControls = []string{"device", "software"}
+
+// volumeLabels describe audio.volume in the Settings row (decision 84).
+var volumeLabels = map[string]string{"device": "on the output device", "software": "software"}
+
 // QualityNotice is shown when the quality changes (decision 78).
 const QualityNotice = "Quality updates on the next track"
 
@@ -54,6 +62,7 @@ const (
 	setQuality
 	setMode
 	setDevice
+	setVolume
 	setAutoplay
 	settingRows
 )
@@ -119,6 +128,11 @@ func (v *SettingsView) rows(width int) []string {
 	r[setQuality] = row("Quality", orDash(v.info.Quality))
 	r[setMode] = row("Audio mode", orDash(v.info.AudioMode))
 	r[setDevice] = row("Device", orDash(v.info.AudioDevice))
+	vol := volumeLabels[v.info.Volume]
+	if vol == "" {
+		vol = volumeLabels["device"]
+	}
+	r[setVolume] = row("Exclusive volume", vol)
 	r[setAutoplay] = row("Autoplay", autoplay)
 	return r
 }
@@ -218,6 +232,11 @@ func (v *SettingsView) change(i int) tea.Cmd {
 			v.info.AudioDevice = d.Name
 			s.Apply("audio.device", d.Name)
 		}))
+	case setVolume:
+		cur := slices.Index(VolumeControls, v.info.Volume) // -1 (unset) is device
+		v.info.Volume = VolumeControls[(max(cur, 0)+1)%len(VolumeControls)]
+		s.Apply("audio.volume", v.info.Volume)
+		return nil
 	default: // setAutoplay
 		v.info.Autoplay = !v.info.Autoplay
 		s.Apply("autoplay", v.info.Autoplay)

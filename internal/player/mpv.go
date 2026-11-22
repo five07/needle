@@ -322,9 +322,6 @@ func (m *MPV) SetPaused(ctx context.Context, paused bool) error {
 
 // SetVolume implements Engine.
 func (m *MPV) SetVolume(ctx context.Context, percent float64) error {
-	if m.cfg.Mode == config.AudioExclusive {
-		return ErrVolumeDisabled
-	}
 	if percent < 0 || percent > 100 {
 		return fmt.Errorf("player: volume %.0f is outside 0-100", percent)
 	}

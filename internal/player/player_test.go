@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"slices"
 	"strings"
@@ -166,6 +167,12 @@ type harness struct {
 
 func newHarness(t *testing.T, mode config.AudioMode, tracks ...string) *harness {
 	t.Helper()
+	return newHarnessVolume(t, mode, "", tracks...)
+}
+
+// newHarnessVolume is newHarness with a volume control (decision 84).
+func newHarnessVolume(t *testing.T, mode config.AudioMode, vol config.VolumeControl, tracks ...string) *harness {
+	t.Helper()
 	h := &harness{t: t, res: &fakeResolver{errs: map[string]error{}, gates: map[string]chan struct{}{}},
 		prober: &fakeProber{hw: HWParams{Format: "S32_LE", Rate: 192000, Channels: 2}}, runErr: make(chan error, 1)}
 	h.q = queue.New[Track](queue.WithRand(rand.New(rand.NewPCG(1, 2))))
@@ -178,6 +185,7 @@ func newHarness(t *testing.T, mode config.AudioMode, tracks ...string) *harness 
 	}
 	h.p = New(Config{
 		Mode:     mode,
+		Volume:   vol,
 		Resolver: h.res,
 		Queue:    h.q,
 		Prober:   h.prober,
@@ -543,6 +551,145 @@ func TestExclusiveVolumeDisabled(t *testing.T) {
 	if !strings.Contains(Message(ErrVolumeDisabled), "DAC or amp") {
 		t.Error("message")
 	}
+}
+
+// TestSoftwareVolumeInExclusive covers TASK-018 AC #2: with software
+// volume chosen, volume works in exclusive mode, and the indicator is
+// bit-perfect only at 100%.
+func TestSoftwareVolumeInExclusive(t *testing.T) {
+	h := newHarnessVolume(t, config.AudioExclusive, config.VolumeSoftware, "a")
+	if !h.p.Status().VolumeEnabled {
+		t.Fatal("volume disabled with software volume")
+	}
+	h.p.Play(ctx())
+	e := h.engine()
+	ha := h.handle(0)
+	waitFor(t, func() bool { return e.count("play") == 1 })
+	h.send(e, Event{Kind: EventStarted, Key: uint64(ha)})
+	exact := Event{Kind: EventFormat, Decoded: AudioParams{192000, 2, "s32"}, Output: AudioParams{192000, 2, "s32"}, Volume: 100}
+	h.send(e, exact)
+	if s := h.p.Status(); s.Indicator.State != BitPerfect {
+		t.Fatalf("at 100%%: %+v", s.Indicator)
+	}
+	level, err := h.p.AdjustVolume(ctx(), -5)
+	if err != nil || level != 95 || !e.has("volume 95") {
+		t.Fatalf("adjust: %v %v %v", level, err, e.callList())
+	}
+	if s := h.p.Status(); s.Volume != 95 {
+		t.Errorf("status volume %v before mpv reports it", s.Volume)
+	}
+	lower := exact
+	lower.Volume = 95
+	h.send(e, lower)
+	if s := h.p.Status(); s.Indicator.State != Altered || !strings.Contains(s.Indicator.Reason, "software volume 95%") {
+		t.Errorf("below 100%%: %+v", s.Indicator)
+	}
+	h.p.AdjustVolume(ctx(), 5)
+	h.send(e, exact)
+	if s := h.p.Status(); s.Indicator.State != BitPerfect {
+		t.Errorf("back at 100%%: %+v", s.Indicator)
+	}
+}
+
+func TestAdjustVolume(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a")
+	steps := []struct {
+		delta, want float64
+	}{{5, 100}, {-30, 70}, {-2.4, 68}, {-100, 0}, {-5, 0}, {150, 100}}
+	for _, st := range steps {
+		got, err := h.p.AdjustVolume(ctx(), st.delta)
+		if err != nil || got != st.want {
+			t.Errorf("adjust %v = %v, %v; want %v", st.delta, got, err, st.want)
+		}
+	}
+	for _, bad := range []float64{-1, 101, math.NaN()} {
+		if err := h.p.SetVolume(ctx(), bad); err == nil {
+			t.Errorf("volume %v accepted", bad)
+		}
+	}
+	ex := newHarness(t, config.AudioExclusive, "a")
+	if _, err := ex.p.AdjustVolume(ctx(), -5); !errors.Is(err, ErrVolumeDisabled) {
+		t.Errorf("exclusive adjust err = %v", err)
+	}
+	if s := ex.p.Status(); s.Volume != 100 {
+		t.Errorf("a refused change moved the volume to %v", s.Volume)
+	}
+}
+
+// TestSetVolumeControl covers decision 83: the control applies at once, and
+// going back to device returns the volume to 100%.
+func TestSetVolumeControl(t *testing.T) {
+	h := newHarness(t, config.AudioExclusive, "a")
+	if h.p.Status().VolumeEnabled {
+		t.Fatal("device volume enabled in exclusive mode")
+	}
+	// Switching with no engine and the volume at 100% sends nothing.
+	if err := h.p.SetVolumeControl(ctx(), config.VolumeDevice); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.p.SetVolumeControl(ctx(), config.VolumeSoftware); err != nil || !h.p.Status().VolumeEnabled {
+		t.Fatalf("software: %v %+v", err, h.p.Status())
+	}
+	h.p.Play(ctx())
+	e := h.engine()
+	waitFor(t, func() bool { return e.count("play") == 1 })
+	if err := h.p.SetVolume(ctx(), 40); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.p.SetVolumeControl(ctx(), config.VolumeDevice); err != nil {
+		t.Fatal(err)
+	}
+	if s := h.p.Status(); s.VolumeEnabled || s.Volume != 100 || !e.has("volume 100") {
+		t.Errorf("back to device: %+v %v", s, e.callList())
+	}
+	if err := h.p.SetVolume(ctx(), 40); !errors.Is(err, ErrVolumeDisabled) {
+		t.Errorf("err = %v", err)
+	}
+	// Without an engine the reset is only recorded.
+	idle := newHarnessVolume(t, config.AudioExclusive, config.VolumeSoftware)
+	idle.p.SetVolume(ctx(), 30)
+	if err := idle.p.SetVolumeControl(ctx(), config.VolumeDevice); err != nil || idle.p.Status().Volume != 100 {
+		t.Errorf("idle reset: %v %+v", err, idle.p.Status())
+	}
+}
+
+// TestVolumeKeptOnNewEngine covers decision 85: the level lasts for the
+// session, across engine restarts, while software volume is allowed.
+func TestVolumeKeptOnNewEngine(t *testing.T) {
+	h := newHarness(t, config.AudioShared, "a")
+	h.p.SetVolume(ctx(), 70) // no engine yet
+	h.p.Play(ctx())
+	e1 := h.engine()
+	waitFor(t, func() bool { return e1.count("play") == 1 })
+	if c := e1.callList(); c[0] != "volume 70" {
+		t.Errorf("first engine calls %v, want the volume first", c)
+	}
+	var made atomic.Int32
+	h.p.SetAudio(ctx(), h.newAudio(config.AudioShared, &made))
+	var e2 *fakeEngine
+	waitFor(t, func() bool { e2 = h.engine(); return e2 != e1 && e2.count("play") == 1 })
+	if !e2.has("volume 70") {
+		t.Errorf("new engine calls %v", e2.callList())
+	}
+	// To exclusive with the volume on the device: back to 100%, and the
+	// new engine gets no volume call.
+	h.p.SetAudio(ctx(), h.newAudio(config.AudioExclusive, &made))
+	var e3 *fakeEngine
+	waitFor(t, func() bool { e3 = h.engine(); return e3 != e2 && e3.count("play") == 1 })
+	if s := h.p.Status(); s.Volume != 100 || s.VolumeEnabled || e3.count("volume") != 0 {
+		t.Errorf("exclusive: %+v %v", s, e3.callList())
+	}
+	// A failed restore is logged, and playback goes on.
+	f := newHarness(t, config.AudioShared, "a")
+	f.p.SetVolume(ctx(), 50)
+	f.mu.Lock()
+	f.newErr = nil
+	f.mu.Unlock()
+	failing := newFakeEngine()
+	failing.setFail("volume", errors.New("ipc"))
+	f.p.SetAudio(ctx(), Audio{Mode: config.AudioShared, Prober: f.prober, NewEngine: func(context.Context) (Engine, error) { return failing, nil }})
+	f.p.Play(ctx())
+	waitFor(t, func() bool { return failing.count("play") == 1 })
 }
 
 func TestPlayWithEmptyQueue(t *testing.T) {
