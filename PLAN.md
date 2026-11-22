@@ -511,6 +511,46 @@ Today the player has software volume in shared mode only (decision 20), but no k
     - c) Move AC #4 to its own spike ticket for when such a DAC is available.
     > MS: a
 
+### TASK-019 (seeking)
+
+Decision 8 ruled out seeking in v1, and `←`/`→` switch panes (decision 26). mpv can seek within the playing stream (needle already starts tracks at a position this way after a stream refresh or an audio switch), so the engine only needs a seek command. The bar's position is sampled once a second today.
+
+89. **The keys (AC #1).**
+    - a) **(Recommended)** `,` seeks back and `.` seeks forward, globally (not while typing). They are free, sit next to each other, and carry `<`/`>` on the same keys.
+    - b) `<` and `>` (shifted).
+    - c) `{` and `}`, beside `[`/`]` for previous/next track.
+    > MS: a 
+
+90. **How the step grows (AC #2).** A held key repeats at the terminal's rate (often 25 to 30 presses a second).
+    - a) **(Recommended)** Presses less than 400 ms apart form a run. In a run, presses 1 and 2 move 5 s, presses 3 and 4 move 10 s, and from press 5 on each moves 30 s. A pause of 400 ms or more, or a change of direction, starts a new run at 5 s. A notice shows the step and the new position, for example "» 10 s · 1:42".
+    - b) By the gap since the last press alone: under 150 ms 30 s, under 400 ms 10 s, otherwise 5 s.
+    > MS: a
+
+91. **Many presses in a row.** Every press could restart the stream at a new position, which is slow and noisy for a held key.
+    - a) **(Recommended)** The bar moves to the new position at once (AC #4), and the presses are combined: needle sends mpv one seek at most every 150 ms, to the latest position. The progress is not overwritten by older samples while a seek is under way.
+    - b) One mpv seek per press.
+    > MS: a
+
+92. **The track's ends (AC #3).**
+    - a) **(Recommended)** Back stops at 0:00. Forward stops 3 s before the end, so the track ends on its own and the next one follows as usual (gapless when preloaded). Seeking forward to the end never skips to the next track, and back from 0:00 never goes to the previous one.
+    - b) Forward stops at the end exactly, so the next track starts at once.
+    > MS: a
+
+93. **Paused, loading, and stopped.**
+    - a) **(Recommended)** Paused: seeking moves the position and stays paused. While a track is loading, or with nothing playing, the keys do nothing. A preview (30 s) seeks like any track, within its 30 s.
+    - b) Paused: seeking also resumes playback.
+    > MS: a
+
+94. **Click to seek on the progress bar.** `UI.md` says the bar is display only, and the ticket asks only for keys.
+    - a) **(Recommended)** Not in this task. The progress bar stays display only.
+    - b) A click on the bar seeks to that point.
+    > MS: a
+
+95. **MPRIS seeking.** `CanSeek` is false today (TASK-015 AC #3), so desktop widgets show no scrubber.
+    - a) **(Recommended)** Turn it on: `Seek` (relative) and `SetPosition` (absolute, for the current track only), with the same limits as in question 92, and the `Seeked` signal after each seek so widgets update.
+    - b) Keep MPRIS without seeking.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -559,7 +599,7 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 5 | Output | Configurable device. Default is shared PipeWire. Optional exclusive ALSA `hw:` mode. The UI shows source vs output format. |
 | 6 | Quality | Setting `aac` / `lossless` / `hires` (default `hires`), mapping to `[AACLC]`, `[FLAC, AACLC]`, `[FLAC_HIRES, FLAC, AACLC]`. Dolby Atmos excluded. |
 | 7 | Credentials | OS keyring (Secret Service), with a `0600` file fallback. One account. |
-| 8 | Transport | Previous/next track only. No seeking in v1. |
+| 8 | Transport | Previous/next track only. No seeking in v1. Superseded by decisions 89 to 95 (TASK-019). |
 | 9 | Discovery | Daily, Discovery, and New Release mixes, plus "Start radio" and "Similar" actions on tracks, artists, and albums. |
 | 10 | Library writes | Favorite/unfavorite (track, album, artist, playlist) and "add track to playlist". |
 | 11 | Queue | Play next, add to queue, shuffle, repeat (off/all/one), remove, and clear. Stops at the end. Persistence and autoplay radio come later. |
@@ -638,6 +678,13 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 86 | Showing the volume | The Settings row shows the choice; the bar adds `vol 70%` after the indicator only below 100%. |
 | 87 | MPRIS volume | Writes set the software volume (clamped to 0-1) wherever the volume keys work, and are refused with NotSupported otherwise. Replaces decision 57. |
 | 88 | ALSA hardware volume | Evaluated and documented only (backlog doc-004, README); no code. |
+| 89 | Seek keys | `,` seeks back and `.` forward, globally (not while typing). Supersedes decision 8. |
+| 90 | Seek step | Presses under 400 ms apart form a run: presses 1 and 2 move 5 s, 3 and 4 move 10 s, 5 on move 30 s. A pause of 400 ms or more, or a change of direction, restarts at 5 s. A notice shows the step and position, "» 10 s · 1:42". |
+| 91 | Combined seeks | The bar shows the new position at once; mpv gets at most one seek per 150 ms, to the latest target. Position samples taken before a seek landed are ignored. |
+| 92 | Track ends | Back stops at 0:00, forward 3 s before the end, so the track ends on its own and the next follows (gapless when preloaded). Seeking never changes track. |
+| 93 | Paused, loading, stopped | Paused stays paused. While loading or with nothing playing the keys do nothing. A preview seeks within its 30 s. |
+| 94 | Click to seek | Not in TASK-019; the progress bar stays display only. |
+| 95 | MPRIS seeking | `CanSeek` while playing or paused; `Seek` and `SetPosition` (current track only) with the limits of decision 92; `Seeked` after every seek, from the keys too. |
 
 ## Definition of Done
 

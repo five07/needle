@@ -98,6 +98,7 @@ type MPV struct {
 	pending  int64
 	seq      int
 	lastPos  time.Duration
+	seeks    uint64 // successful seeks, stamped on progress samples
 	format   Event
 	busySeen bool
 	closing  bool
@@ -327,6 +328,31 @@ func (m *MPV) SetVolume(ctx context.Context, percent float64) error {
 	}
 	_, err := m.ipc.command(ctx, "set_property", "volume", percent)
 	return err
+}
+
+// Seek implements Engine. It seeks exactly, so a step lands where the bar
+// says it did.
+func (m *MPV) Seek(ctx context.Context, key uint64, position time.Duration) error {
+	if position < 0 {
+		return fmt.Errorf("player: seek position %s is negative", position)
+	}
+	m.mu.Lock()
+	e, ok := m.entries[m.current]
+	m.mu.Unlock()
+	if !ok || e.key != key {
+		return ErrNotSeekable
+	}
+	secs := strconv.FormatFloat(position.Seconds(), 'f', 3, 64)
+	if _, err := m.ipc.command(ctx, "seek", secs, "absolute+exact"); err != nil {
+		return err
+	}
+	m.mu.Lock()
+	m.seeks++
+	if m.entries[m.current].key == key {
+		m.lastPos = position // a stream failure resumes from here
+	}
+	m.mu.Unlock()
+	return nil
 }
 
 // Stop implements Engine.
@@ -646,6 +672,7 @@ func (m *MPV) poll() {
 		}
 		m.mu.Lock()
 		e, ok := m.entries[m.current]
+		seeks := m.seeks
 		m.mu.Unlock()
 		if !ok {
 			continue
@@ -658,9 +685,15 @@ func (m *MPV) poll() {
 			continue
 		}
 		m.mu.Lock()
+		if m.seeks != seeks {
+			// A seek landed while sampling: this position may be from
+			// before it. The next sample has the new one.
+			m.mu.Unlock()
+			continue
+		}
 		m.lastPos = pos
 		m.mu.Unlock()
-		m.emit(Event{Kind: EventProgress, Key: e.key, Position: pos, Duration: dur})
+		m.emit(Event{Kind: EventProgress, Key: e.key, Position: pos, Duration: dur, Seeks: seeks})
 	}
 }
 

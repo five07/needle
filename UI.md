@@ -52,7 +52,7 @@ Everything in the now-playing bar is centered. The title is drawn at 2x size, so
 | 2 | Artist · Album | Row 3, centered, truncated with `…`. | TASK-013 #1 | Centered |
 | 3 | Format | Row 4, centered. Source format from the stream (`FLAC 24/96`, `FLAC 16/44.1`, `AAC`), then output format. Green `✓ bit-perfect` when they match, yellow `⚠ resampled` when they differ. | TASK-013 #2, Decision 5 | Centered, own line |
 | 4 | Output mode | On the format line: `shared` or `exclusive` **(guess)**. | Decision 5 | |
-| 5 | Progress | Row 5, centered. Elapsed, bar, total. Display only, no seeking, no click-to-seek. | TASK-013 #1, Decision 8 | |
+| 5 | Progress | Row 5, centered. Elapsed, bar, total. Display only, no click-to-seek; `,`/`.` seek and the bar moves at once. | TASK-013 #1, TASK-019, Decisions 91, 94 | |
 | 6 | Controls | Row 6, centered: `⇄ shuffle`, `[⏮] [⏯] [⏭]`, `↻ repeat`. All clickable (shuffle/repeat click is a **(guess)**). No rewind/seek buttons. | TASK-013 #3, #5 | |
 | 7 | Preview flag | While the access tier serves 30s previews, show a `PREVIEW` badge **(guess)**. | README Status | |
 | 8 | Gapless prefetch | No UI indicator **(guess)**. | Decision 13 | |
@@ -105,6 +105,7 @@ Keys from the tasks are fixed. **(guess)** keys fill the gaps and avoid clashes.
 | 23 | `?` | Help overlay | global | TASK-009 | |
 | 24 | `q` / `ctrl+c` | Quit (`q` types normally while in the search input) | global | TASK-009 | |
 | 25 | `-` / `=` | Volume down / up by 5% (software volume; a notice shows the level) | global | TASK-018 | Approved (Q82) |
+| 26 | `,` / `.` | Seek back / forward in the current track; the step grows 5, 10, 30 s in a run of presses under 400 ms apart; a notice shows "» 10 s · 1:42" | global | TASK-019 | Approved (Q89, Q90) |
 
 Global letter keys (`space`, `n`, `p`, `s`, `r`, `q`) are disabled while a text input has focus, so search text can include them. `esc` leaves the input.
 
@@ -119,7 +120,7 @@ Global letter keys (`space`, `n`, `p`, `s`, `r`, `q`) are disabled while a text 
 | 5 | Click transport buttons | Prev / play-pause / next | TASK-013 #5 | |
 | 6 | Click shuffle / repeat | Toggle **(guess)** | none | |
 | 7 | Right-click row | Action menu (queue, play next, fav, radio, similar, add to playlist) **(guess)** | none | |
-| 8 | Click progress bar | Nothing (no seek in v1) | Decision 8 | |
+| 8 | Click progress bar | Nothing (seeking is keys only) | Decision 94 | |
 
 ## 7. Feedback and states
 

@@ -89,6 +89,12 @@ func (f *fakeControls) SetLoop(_ context.Context, l Loop) error { return f.rec("
 func (f *fakeControls) SetVolume(_ context.Context, v float64) error {
 	return f.rec(fmt.Sprintf("Volume %.2f", v))
 }
+func (f *fakeControls) Seek(_ context.Context, d time.Duration) error {
+	return f.rec(fmt.Sprintf("Seek %s", d))
+}
+func (f *fakeControls) SetPosition(_ context.Context, h uint64, d time.Duration) error {
+	return f.rec(fmt.Sprintf("SetPosition %d %s", h, d))
+}
 
 type env struct {
 	svc    *Service
@@ -131,7 +137,7 @@ func TestRegistersAndExposesInterfaces(t *testing.T) {
 		{ifaceRoot, "CanQuit", false},
 		{ifaceRoot, "CanRaise", false},
 		{ifaceRoot, "HasTrackList", false},
-		{ifacePlayer, "CanSeek", false}, // AC #3
+		{ifacePlayer, "CanSeek", false}, // nothing playing
 		{ifacePlayer, "CanControl", true},
 		{ifacePlayer, "PlaybackStatus", "Stopped"},
 		{ifacePlayer, "LoopStatus", "None"},
@@ -205,7 +211,7 @@ func TestMethods(t *testing.T) {
 			t.Errorf("%s: %v", m, call.Err)
 		}
 	}
-	// No seeking, no URIs, no raise or quit: accepted and ignored.
+	// Nothing to seek in, no URIs, no raise or quit: accepted and ignored.
 	calls := []*dbus.Call{
 		e.obj.Call(ifacePlayer+".Seek", 0, int64(5e6)),
 		e.obj.Call(ifacePlayer+".SetPosition", 0, dbus.ObjectPath(trackPrefix+"1"), int64(5e6)),
@@ -388,6 +394,93 @@ func TestUpdateAnnouncesChanges(t *testing.T) {
 	}
 	if md := got["Metadata"].(map[string]dbus.Variant); md["mpris:trackid"].Value() != noTrack {
 		t.Errorf("empty metadata %v", md)
+	}
+}
+
+// TASK-019 decision 95: Seek and SetPosition reach the player while a
+// track plays, CanSeek follows, and every seek emits Seeked.
+func TestSeeking(t *testing.T) {
+	e := newEnv(t)
+	if err := e.client.AddMatchSignal(dbus.WithMatchInterface(ifacePlayer), dbus.WithMatchMember("Seeked")); err != nil {
+		t.Fatal(err)
+	}
+	sigs := make(chan *dbus.Signal, 8)
+	e.client.Signal(sigs)
+	tr := &Track{Handle: 7, ID: "1", Title: "T", Length: 320 * time.Second}
+	st := State{Status: Playing, Track: tr, Position: time.Minute, CanSeek: true}
+	e.svc.Update(st)
+	if v := e.get(t, ifacePlayer, "CanSeek"); v != true {
+		t.Errorf("CanSeek = %v while playing", v)
+	}
+	call := func(method string, args ...any) {
+		t.Helper()
+		if err := e.obj.Call(ifacePlayer+"."+method, 0, args...).Err; err != nil {
+			t.Errorf("%s%v: %v", method, args, err)
+		}
+	}
+	call("Seek", int64(10e6))
+	call("Seek", int64(-5e6))
+	call("Seek", int64(math.MaxInt64)) // clamped, not wrapped
+	call("SetPosition", dbus.ObjectPath(trackPrefix+"7"), int64(90e6))
+	// Ignored, as the spec says: another track, outside the track, or a
+	// path that is not a track.
+	call("SetPosition", dbus.ObjectPath(trackPrefix+"8"), int64(90e6))
+	call("SetPosition", dbus.ObjectPath(trackPrefix+"7"), int64(-1))
+	call("SetPosition", dbus.ObjectPath(trackPrefix+"7"), int64(321e6))
+	call("SetPosition", dbus.ObjectPath(trackPrefix+"x"), int64(1e6))
+	call("SetPosition", noTrack, int64(1e6))
+	want := []string{"Seek 10s", "Seek -5s", fmt.Sprintf("Seek %s", time.Duration(math.MaxInt64/1000)*time.Microsecond), "SetPosition 7 1m30s"}
+	if got := e.ctl.got(); !reflect.DeepEqual(got, want) {
+		t.Errorf("controls %v, want %v", got, want)
+	}
+
+	// A seek from anywhere (the keys too) emits Seeked with the new position.
+	st.Position, st.SeekID = 95*time.Second, 1
+	e.svc.Update(st)
+	select {
+	case s := <-sigs:
+		if s.Name != ifacePlayer+".Seeked" || s.Body[0] != int64(95e6) {
+			t.Errorf("signal %s %v", s.Name, s.Body)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("no Seeked signal")
+	}
+	// No seek, no signal.
+	st.Position = 96 * time.Second
+	e.svc.Update(st)
+	select {
+	case s := <-sigs:
+		t.Errorf("unexpected signal %s %v", s.Name, s.Body)
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	// A failing seek returns the generic error.
+	e.ctl.fail(errors.New("mpv broke"))
+	var de dbus.Error
+	if err := e.obj.Call(ifacePlayer+".Seek", 0, int64(1e6)).Err; !errors.As(err, &de) || de.Name != "org.freedesktop.DBus.Error.Failed" {
+		t.Errorf("failure: %v", err)
+	}
+	e.ctl.fail(nil)
+
+	// Loading or stopped: CanSeek is false and seeks are ignored.
+	n := len(e.ctl.got())
+	st.CanSeek = false
+	e.svc.Update(st)
+	if v := e.get(t, ifacePlayer, "CanSeek"); v != false {
+		t.Errorf("CanSeek = %v while loading", v)
+	}
+	call("Seek", int64(10e6))
+	call("SetPosition", dbus.ObjectPath(trackPrefix+"7"), int64(90e6))
+	if len(e.ctl.got()) != n {
+		t.Errorf("seeks reached the player while not seekable: %v", e.ctl.got()[n:])
+	}
+}
+
+func TestTrackHandle(t *testing.T) {
+	for p, want := range map[dbus.ObjectPath]uint64{trackPrefix + "7": 7, trackPrefix + "0": 0, trackPrefix: 0, trackPrefix + "-1": 0, noTrack: 0} {
+		if h, ok := trackHandle(p); h != want || ok != (want != 0) {
+			t.Errorf("trackHandle(%s) = %d %v", p, h, ok)
+		}
 	}
 }
 

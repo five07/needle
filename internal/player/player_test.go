@@ -68,6 +68,9 @@ func (f *fakeEngine) SetPaused(_ context.Context, p bool) error {
 func (f *fakeEngine) SetVolume(_ context.Context, v float64) error {
 	return f.record(fmt.Sprintf("volume %.0f", v))
 }
+func (f *fakeEngine) Seek(_ context.Context, key uint64, pos time.Duration) error {
+	return f.record(fmt.Sprintf("seek %d@%s", key, pos))
+}
 func (f *fakeEngine) Stop(context.Context) error { return f.record("stop") }
 func (f *fakeEngine) Events() <-chan Event       { return f.events }
 func (f *fakeEngine) Close() error {

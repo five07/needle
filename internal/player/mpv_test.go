@@ -275,6 +275,56 @@ func TestMPVStopAndReplace(t *testing.T) {
 	}
 }
 
+func TestMPVSeek(t *testing.T) {
+	t.Setenv("FAKE_MPV_TRACK_MS", "5000")
+	m, env, err := startFake(t, "normal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if err := m.Seek(ctx, 1, time.Minute); !errors.Is(err, ErrNotSeekable) {
+		t.Errorf("idle seek err = %v, want ErrNotSeekable", err)
+	}
+	if err := m.Play(ctx, item(1)); err != nil {
+		t.Fatal(err)
+	}
+	collect(t, m, func(e Event) bool { return e.Kind == EventStarted })
+	if err := m.Seek(ctx, 2, time.Minute); !errors.Is(err, ErrNotSeekable) {
+		t.Errorf("seek of another item err = %v, want ErrNotSeekable", err)
+	}
+	if err := m.Seek(ctx, 1, -time.Second); err == nil {
+		t.Error("negative seek accepted")
+	}
+	if err := m.Seek(ctx, 1, 100*time.Second); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(fakeLog(t, env), `"seek","100.000","absolute+exact"`) {
+		t.Errorf("seek command not sent: %s", fakeLog(t, env))
+	}
+	// Samples after the seek carry its count and the new position.
+	timeout := time.After(3 * time.Second)
+	for {
+		select {
+		case e := <-m.Events():
+			if e.Kind != EventProgress {
+				continue
+			}
+			if e.Seeks != 1 {
+				if e.Position >= 100*time.Second {
+					t.Fatalf("sample at %v without the seek count", e.Position)
+				}
+				continue
+			}
+			if e.Position < 100*time.Second || e.Position > 103*time.Second {
+				t.Errorf("position after seek = %v", e.Position)
+			}
+			return
+		case <-timeout:
+			t.Fatal("no progress after the seek")
+		}
+	}
+}
+
 func TestMPVVolume(t *testing.T) {
 	m, env, err := startFake(t, "normal")
 	if err != nil {

@@ -36,12 +36,20 @@ type volumer interface {
 	SetVolume(ctx context.Context, percent float64) error
 }
 
+// seeker is the seeking part of *player.Player (decisions 91 to 95).
+type seeker interface {
+	SeekBy(ctx context.Context, delta time.Duration) (time.Duration, error)
+	SeekTo(ctx context.Context, h queue.Handle, position time.Duration) (time.Duration, error)
+}
+
 // playback implements tui.Playback on the play queue and the player.
 type playback struct {
 	q *queue.Queue[player.Track]
 	p transport
 	// vol changes the software volume; nil means volume cannot change.
 	vol volumer
+	// sk seeks in the current track; nil means seeking is not possible.
+	sk seeker
 	// changed, when set (capacity 1), is signaled after each queue edit
 	// so watchStatus sends a new snapshot.
 	changed chan struct{}
@@ -82,6 +90,18 @@ func (b *playback) AdjustVolume(ctx context.Context, delta float64) (float64, er
 		return level, tui.ErrVolumeOnDevice
 	}
 	return level, err
+}
+
+// SeekBy implements tui.Seeker.
+func (b *playback) SeekBy(ctx context.Context, delta time.Duration) (time.Duration, error) {
+	if b.sk == nil {
+		return 0, tui.ErrNotSeekable
+	}
+	pos, err := b.sk.SeekBy(ctx, delta)
+	if errors.Is(err, player.ErrNotSeekable) {
+		return pos, tui.ErrNotSeekable
+	}
+	return pos, err
 }
 
 // addAutoplayed appends radio tracks as autoplayed entries, leaving out
@@ -310,7 +330,7 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 			np := nowPlaying(st, snap, mode)
 			np.Autoplay = w.auto != nil && w.auto.b.Autoplay()
 			if w.mpris != nil {
-				w.mpris.Update(mprisState(np, st.Volume))
+				w.mpris.Update(mprisState(np, st))
 			}
 			if w.best != nil {
 				now := time.Now

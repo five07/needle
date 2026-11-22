@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"time"
 
 	"github.com/godbus/dbus/v5"
 	"github.com/godbus/dbus/v5/introspect"
@@ -32,18 +33,53 @@ func (s *Service) rootMethods() map[string]any {
 func (s *Service) playerMethods() map[string]any {
 	c := s.controls
 	return map[string]any{
-		"Play":      func() *dbus.Error { return s.call("Play", c.Play) },
-		"Pause":     func() *dbus.Error { return s.call("Pause", c.Pause) },
-		"PlayPause": func() *dbus.Error { return s.call("PlayPause", c.PlayPause) },
-		"Stop":      func() *dbus.Error { return s.call("Stop", c.Stop) },
-		"Next":      func() *dbus.Error { return s.call("Next", c.Next) },
-		"Previous":  func() *dbus.Error { return s.call("Previous", c.Previous) },
-		// No seeking (AC #3): the spec says to ignore these when CanSeek is
-		// false.
-		"Seek":        func(int64) *dbus.Error { return nil },
-		"SetPosition": func(dbus.ObjectPath, int64) *dbus.Error { return nil },
+		"Play":        func() *dbus.Error { return s.call("Play", c.Play) },
+		"Pause":       func() *dbus.Error { return s.call("Pause", c.Pause) },
+		"PlayPause":   func() *dbus.Error { return s.call("PlayPause", c.PlayPause) },
+		"Stop":        func() *dbus.Error { return s.call("Stop", c.Stop) },
+		"Next":        func() *dbus.Error { return s.call("Next", c.Next) },
+		"Previous":    func() *dbus.Error { return s.call("Previous", c.Previous) },
+		"Seek":        s.seek,
+		"SetPosition": s.setPosition,
 		"OpenUri":     func(string) *dbus.Error { return nil },
 	}
+}
+
+// seek moves the current track by offset microseconds (decision 95). It
+// stops at 0:00 and short of the end instead of going to the next track
+// as the spec suggests, like the seek keys (decision 92).
+func (s *Service) seek(offset int64) *dbus.Error {
+	if !s.seekable() {
+		return nil // the spec: ignore while CanSeek is false
+	}
+	// Kept within what a time.Duration holds; the player clamps to the
+	// track anyway.
+	const maxMicros = math.MaxInt64 / int64(time.Microsecond)
+	d := time.Duration(min(max(offset, -maxMicros), maxMicros)) * time.Microsecond
+	return s.call("Seek", func(ctx context.Context) error { return s.controls.Seek(ctx, d) })
+}
+
+// setPosition moves track id to position microseconds. As the spec says,
+// it does nothing when id is not the current track or position is outside
+// the track.
+func (s *Service) setPosition(id dbus.ObjectPath, position int64) *dbus.Error {
+	h, ok := trackHandle(id)
+	s.mu.Lock()
+	t := s.last.Track
+	s.mu.Unlock()
+	if !ok || !s.seekable() || t == nil || t.Handle != h || position < 0 ||
+		(t.Length > 0 && position > t.Length.Microseconds()) {
+		return nil
+	}
+	d := time.Duration(position) * time.Microsecond
+	return s.call("SetPosition", func(ctx context.Context) error { return s.controls.SetPosition(ctx, h, d) })
+}
+
+// seekable reports whether the last state allowed seeking.
+func (s *Service) seekable() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.last.CanSeek && s.last.Track != nil
 }
 
 func (s *Service) onShuffle(ch *prop.Change) *dbus.Error {

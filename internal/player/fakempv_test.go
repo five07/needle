@@ -143,6 +143,8 @@ func (f *fakeMPV) serve() {
 			if cur != nil {
 				f.send(map[string]any{"event": "end-file", "reason": "stop", "playlist_entry_id": cur.id})
 			}
+		case "seek":
+			f.seek(req.RequestID, req.Command)
 		case "quit":
 			f.reply(req.RequestID, nil, "")
 			if f.mode != "ignore-quit" && f.mode != "stall-fade" {
@@ -190,6 +192,21 @@ func (f *fakeMPV) setProperty(id any, cmd []any) {
 		f.volume, _ = cmd[2].(float64)
 	}
 	f.mu.Unlock()
+	f.reply(id, nil, "")
+}
+
+// seek moves time-pos of the current track to an absolute position.
+func (f *fakeMPV) seek(id any, cmd []any) {
+	arg, _ := cmd[1].(string)
+	var secs float64
+	fmt.Sscan(arg, &secs)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.current == nil {
+		f.reply(id, nil, "error running command")
+		return
+	}
+	f.started = time.Now().Add(-time.Duration((secs - 12) * float64(time.Second)))
 	f.reply(id, nil, "")
 }
 

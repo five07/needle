@@ -1,6 +1,6 @@
 // Package mpris publishes the player on the D-Bus session bus with the
 // MPRIS D-Bus Interface Specification, so desktop media keys and bar
-// widgets can show and control playback. Seeking is not supported (Q8).
+// widgets can show and control playback, seeking included (decision 95).
 package mpris
 
 import (
@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -80,6 +81,10 @@ type State struct {
 	Volume   float64 // 0 to 1
 	CanNext  bool
 	CanPrev  bool
+	// CanSeek is set while a track plays or is paused.
+	CanSeek bool
+	// SeekID changes with every seek; a change emits the Seeked signal.
+	SeekID uint64
 }
 
 // Controls is what MPRIS methods and property writes do. The methods are
@@ -97,6 +102,12 @@ type Controls interface {
 	// SetVolume sets the volume, 0 to 1. It returns ErrVolumeNotSupported
 	// when the volume is set on the output device (decision 87).
 	SetVolume(ctx context.Context, v float64) error
+	// Seek moves the current track by offset (negative is back). It never
+	// leaves the track (decision 92).
+	Seek(ctx context.Context, offset time.Duration) error
+	// SetPosition moves the queue entry with handle to position, when it
+	// is the current track.
+	SetPosition(ctx context.Context, handle uint64, position time.Duration) error
 }
 
 // ErrVolumeNotSupported means volume cannot be changed from here: it is set
@@ -211,7 +222,7 @@ func (s *Service) propMap() prop.Map {
 			"CanGoPrevious": ro(false),
 			"CanPlay":       ro(false),
 			"CanPause":      ro(false),
-			"CanSeek":       ro(false), // AC #3
+			"CanSeek":       ro(false),
 			"CanControl":    {Value: true, Emit: prop.EmitConst},
 		},
 	}
@@ -247,12 +258,18 @@ func (s *Service) Update(st State) {
 		set("Volume", st.Volume)
 	}
 	has := st.Track != nil
-	for name, v := range map[string]bool{"CanGoNext": st.CanNext, "CanGoPrevious": st.CanPrev, "CanPlay": has, "CanPause": has} {
+	for name, v := range map[string]bool{"CanGoNext": st.CanNext, "CanGoPrevious": st.CanPrev, "CanPlay": has, "CanPause": has, "CanSeek": st.CanSeek && has} {
 		if cur, err := s.props.Get(ifacePlayer, name); err != nil || cur.Value() != v {
 			set(name, v)
 		}
 	}
 	set("Position", st.Position.Microseconds())
+	if st.SeekID != old.SeekID && has {
+		// Widgets expect Seeked after a jump instead of a Position change.
+		if err := s.conn.Emit(ObjectPath, ifacePlayer+".Seeked", st.Position.Microseconds()); err != nil {
+			s.logger.Debug("mpris seeked signal failed", "err", err)
+		}
+	}
 }
 
 func sameTrack(a, b *Track) bool {
@@ -284,6 +301,17 @@ func metadata(t *Track) map[string]dbus.Variant {
 		m["xesam:url"] = dbus.MakeVariant("https://tidal.com/browse/track/" + t.ID)
 	}
 	return m
+}
+
+// trackHandle returns the queue handle in an MPRIS track ID made by
+// metadata, or false for any other path.
+func trackHandle(p dbus.ObjectPath) (uint64, bool) {
+	rest, ok := strings.CutPrefix(string(p), trackPrefix)
+	if !ok {
+		return 0, false
+	}
+	h, err := strconv.ParseUint(rest, 10, 64)
+	return h, err == nil && h != 0
 }
 
 // validID reports whether id is a plain TIDAL track ID (digits), safe to

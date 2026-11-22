@@ -245,7 +245,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, cl
 	}()
 	notices := make(chan string, 4)
 	status := make(chan tui.NowPlaying, 1)
-	pb := &playback{q: q, p: p, vol: p, changed: make(chan struct{}, 1)}
+	pb := &playback{q: q, p: p, vol: p, sk: p, changed: make(chan struct{}, 1)}
 	pb.autoplay.Store(cfg.Autoplay)
 	var best *bestQuality
 	if stateDir != "" {
@@ -304,7 +304,7 @@ func newUI(ctx context.Context, d deps, cfg config.Config, configPath string, cl
 	settingsSvc.devices = listDevices(d)
 
 	svc := &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
-		Playback: pb, Transport: pb, Volume: pb, Visualizer: vis, Settings: settingsSvc, Logger: logger}
+		Playback: pb, Transport: pb, Volume: pb, Seek: pb, Visualizer: vis, Settings: settingsSvc, Logger: logger}
 	model = tui.New(tui.Config{
 		Services:  svc,
 		Account:   tui.NewAccountView(svc, acct),

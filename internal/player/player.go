@@ -73,6 +73,8 @@ type Status struct {
 	// EndOfQueue is set when playback stopped because the queue ran out
 	// (repeat off), not because it was stopped, so autoplay can go on.
 	EndOfQueue bool
+	// SeekID changes with every seek, so MPRIS can announce it.
+	SeekID uint64
 }
 
 // Config configures a Player.
@@ -89,7 +91,15 @@ type Config struct {
 	// PreloadAhead is how long before the end of a track the next one is
 	// fetched and preloaded. Default 45 s.
 	PreloadAhead time.Duration
+	// SeekInterval is the least time between two seeks sent to the engine;
+	// seeks asked for in between are combined into one (decision 91).
+	// Default 150 ms.
+	SeekInterval time.Duration
 }
+
+// SeekEndMargin is how close to the end of a track a seek may go, so the
+// track still ends on its own and the next one follows (decision 92).
+const SeekEndMargin = 3 * time.Second
 
 type loadResult struct {
 	gen      uint64
@@ -134,6 +144,15 @@ type Player struct {
 	// volume is the software volume asked for, applied to each new engine
 	// while software volume is allowed (decision 85).
 	volume float64
+	// Seeking (decision 91): seekWanted holds a position not yet sent to
+	// the engine, sent when seekTimer fires; seekSent is when the last one
+	// went out. seeks counts the engine's seeks, to skip older samples.
+	seekWanted bool
+	seekTarget time.Duration
+	seekSent   time.Time
+	seekTimer  *time.Timer
+	seekC      <-chan time.Time
+	seeks      uint64
 
 	// loaded, when set (tests only), is called after each resolve result is
 	// handled on the Run goroutine.
@@ -147,6 +166,9 @@ func New(cfg Config) *Player {
 	}
 	if cfg.PreloadAhead == 0 {
 		cfg.PreloadAhead = 45 * time.Second
+	}
+	if cfg.SeekInterval == 0 {
+		cfg.SeekInterval = 150 * time.Millisecond
 	}
 	p := &Player{
 		cfg:       cfg,
@@ -175,6 +197,7 @@ func (p *Player) Updates() <-chan struct{} { return p.updates }
 func (p *Player) Run(ctx context.Context) error {
 	defer func() {
 		close(p.done)
+		p.cancelSeek()
 		if p.engine != nil {
 			p.engine.Close()
 		}
@@ -185,6 +208,9 @@ func (p *Player) Run(ctx context.Context) error {
 			return ctx.Err()
 		case cmd := <-p.cmds:
 			cmd(ctx)
+		case <-p.seekC:
+			p.seekC = nil
+			p.sendSeek(ctx)
 		case r := <-p.results:
 			p.onLoaded(ctx, r)
 			if p.loaded != nil {
@@ -354,6 +380,82 @@ func (p *Player) resetVolume(ctx context.Context) error {
 	return p.engine.SetVolume(ctx, 100)
 }
 
+// SeekBy moves the playing or paused track by delta (negative is back)
+// from the position shown, and returns the new position. It never leaves
+// the track: back stops at 0:00, forward SeekEndMargin before the end
+// (decision 92). Paused stays paused. It returns ErrNotSeekable while a
+// track is loading or nothing plays (decision 93).
+func (p *Player) SeekBy(ctx context.Context, delta time.Duration) (time.Duration, error) {
+	var pos time.Duration
+	err := p.do(ctx, func(rctx context.Context) error {
+		var err error
+		pos, err = p.seek(rctx, p.st.Position+delta)
+		return err
+	})
+	return pos, err
+}
+
+// SeekTo moves the playing or paused queue entry h to position, with the
+// limits of SeekBy, and returns the new position. It returns
+// ErrNotSeekable when h is not the current track.
+func (p *Player) SeekTo(ctx context.Context, h queue.Handle, position time.Duration) (time.Duration, error) {
+	var pos time.Duration
+	err := p.do(ctx, func(rctx context.Context) error {
+		if h != p.current {
+			return ErrNotSeekable
+		}
+		var err error
+		pos, err = p.seek(rctx, position)
+		return err
+	})
+	return pos, err
+}
+
+// seek shows target at once and sends it to the engine, at most one seek
+// per SeekInterval: a seek asked for sooner waits and replaces any other
+// waiting one (decision 91).
+func (p *Player) seek(ctx context.Context, target time.Duration) (time.Duration, error) {
+	if p.engine == nil || (p.st.State != Playing && p.st.State != Paused) {
+		return 0, ErrNotSeekable
+	}
+	target = min(max(target, 0), max(p.st.Duration-SeekEndMargin, 0))
+	p.st.Position = target
+	p.st.SeekID++
+	p.seekWanted, p.seekTarget = true, target
+	if p.seekC != nil {
+		return target, nil // the waiting seek takes the new target
+	}
+	if wait := p.cfg.SeekInterval - time.Since(p.seekSent); wait > 0 {
+		p.seekTimer = time.NewTimer(wait)
+		p.seekC = p.seekTimer.C
+		return target, nil
+	}
+	p.sendSeek(ctx)
+	return target, nil
+}
+
+// sendSeek sends the waiting seek to the engine. Every path that drops
+// the engine or changes the track calls cancelSeek first, so a seek is
+// waiting and the engine is set whenever this runs.
+func (p *Player) sendSeek(ctx context.Context) {
+	p.seekWanted, p.seekSent = false, time.Now()
+	if err := p.engine.Seek(ctx, uint64(p.current), p.seekTarget); err != nil {
+		p.logger.Warn("seek failed", "track_id", p.trackID(), "position", p.seekTarget, "err", err)
+		return
+	}
+	p.seeks++
+	p.logger.Debug("seek", "track_id", p.trackID(), "position", p.seekTarget)
+}
+
+// cancelSeek drops a seek still waiting to be sent: the track changed.
+func (p *Player) cancelSeek() {
+	p.seekWanted = false
+	if p.seekTimer != nil {
+		p.seekTimer.Stop()
+		p.seekTimer, p.seekC = nil, nil
+	}
+}
+
 // ErrNoManifest means the player holds no manifest for that queue entry.
 var ErrNoManifest = errors.New("player: no manifest for this track")
 
@@ -431,6 +533,8 @@ func (p *Player) SetAudio(ctx context.Context, a Audio) error {
 		if p.engine == nil {
 			return nil
 		}
+		// A waiting seek is not lost: the track reloads at its target.
+		p.cancelSeek()
 		if err := p.engine.Close(); err != nil {
 			p.logger.Debug("engine close for audio switch", "err", err)
 		}
@@ -456,6 +560,7 @@ func (p *Player) SetAudio(ctx context.Context, a Audio) error {
 
 func (p *Player) stop(ctx context.Context) error {
 	p.gen++
+	p.cancelSeek()
 	p.preloaded, p.preloading = 0, false
 	p.st.State, p.st.Position, p.st.EndOfQueue = Stopped, 0, false
 	if p.engine == nil {
@@ -475,6 +580,7 @@ func (p *Player) loadCurrent() {
 func (p *Player) load(h queue.Handle, t Track, start time.Duration) {
 	p.gen++
 	gen := p.gen
+	p.cancelSeek()
 	p.current, p.st.Handle = h, h
 	p.preloaded, p.preloading = 0, false
 	p.st.State, p.st.Track, p.st.Position, p.st.Message = Loading, &t, start, ""
@@ -546,7 +652,7 @@ func (p *Player) ensureEngine(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	p.engine, p.events = e, e.Events()
+	p.engine, p.events, p.seeks = e, e.Events(), 0
 	if p.volume < 100 && p.volumeAllowed() {
 		// mpv starts at 100%: keep the level asked for (decision 85).
 		if err := e.SetVolume(ctx, p.volume); err != nil {
@@ -621,6 +727,10 @@ func (p *Player) onEvent(ctx context.Context, ev Event) {
 		p.st.Preview, p.st.PreviewMessage = m.Preview(), ""
 		if m.Preview() {
 			p.st.PreviewMessage = stream.PreviewMessage(m.PreviewReason)
+			if m.Duration > 0 {
+				// The stream is a 30 s clip: seek within it (decision 93).
+				p.st.Duration = m.Duration
+			}
 		}
 		if p.preloaded == h {
 			p.preloaded = 0
@@ -650,6 +760,9 @@ func (p *Player) onEvent(ctx context.Context, ev Event) {
 		if h != p.current {
 			return
 		}
+		if p.seekWanted || ev.Seeks < p.seeks {
+			return // from before a seek; the bar already shows the target
+		}
 		p.st.Position = ev.Position
 		if ev.Duration > 0 {
 			p.st.Duration = ev.Duration
@@ -657,6 +770,7 @@ func (p *Player) onEvent(ctx context.Context, ev Event) {
 		p.assess(ctx)
 		p.maybePreload(ev)
 	case EventFailed:
+		p.cancelSeek()
 		p.engine, p.events = nil, nil
 		p.preloaded, p.preloading = 0, false
 		p.fail(p.trackID(), ev.Err)
@@ -693,6 +807,7 @@ func (p *Player) onEnded(ctx context.Context, h queue.Handle, ev Event) {
 	next := s.Current.Handle
 	if next == p.preloaded {
 		// mpv is already playing it gaplessly.
+		p.cancelSeek()
 		p.current, p.st.Handle = next, next
 		p.st.Track, p.st.Position, p.st.Duration = &s.Current.Item, 0, s.Current.Item.Duration
 		return

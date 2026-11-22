@@ -329,7 +329,7 @@ func TestNowPlayingShowsAutoplay(t *testing.T) {
 	if !np.Autoplay || len(np.Upcoming) != 2 || !np.Upcoming[0].Track.Autoplay {
 		t.Errorf("np %+v", np)
 	}
-	if s := mprisState(tui.NowPlaying{Current: np.Current, Autoplay: true}, 100); !s.CanNext {
+	if s := mprisState(tui.NowPlaying{Current: np.Current, Autoplay: true}, player.Status{Volume: 100}); !s.CanNext {
 		t.Error("MPRIS: next is possible with autoplay on")
 	}
 }

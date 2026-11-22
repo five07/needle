@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	osexec "os/exec"
 	"reflect"
@@ -33,6 +34,69 @@ func (v *stubVolume) AdjustVolume(_ context.Context, d float64) (float64, error)
 func (v *stubVolume) SetVolume(_ context.Context, p float64) error {
 	v.set = append(v.set, p)
 	return v.err
+}
+
+// stubSeeker records seeks and returns err.
+type stubSeeker struct {
+	calls []string
+	err   error
+}
+
+func (s *stubSeeker) SeekBy(_ context.Context, d time.Duration) (time.Duration, error) {
+	s.calls = append(s.calls, "by "+d.String())
+	return time.Minute + d, s.err
+}
+func (s *stubSeeker) SeekTo(_ context.Context, h queue.Handle, d time.Duration) (time.Duration, error) {
+	s.calls = append(s.calls, fmt.Sprintf("to %d %s", h, d))
+	return d, s.err
+}
+
+// TASK-019: the seek keys and MPRIS reach the player; nothing to seek in
+// is silent for the keys and ignored over MPRIS (decisions 93 and 95).
+func TestSeekControls(t *testing.T) {
+	ctx := context.Background()
+	sk := &stubSeeker{}
+	b := &playback{q: queue.New[player.Track](), p: &stubTransport{}, sk: sk}
+	c := mprisControls{b}
+	if pos, err := b.SeekBy(ctx, 5*time.Second); err != nil || pos != 65*time.Second {
+		t.Errorf("keys: %v %v", pos, err)
+	}
+	if err := c.Seek(ctx, -10*time.Second); err != nil {
+		t.Errorf("mpris seek: %v", err)
+	}
+	if err := c.SetPosition(ctx, 4, 90*time.Second); err != nil {
+		t.Errorf("mpris set position: %v", err)
+	}
+	if want := []string{"by 5s", "by -10s", "to 4 1m30s"}; !reflect.DeepEqual(sk.calls, want) {
+		t.Errorf("calls %v, want %v", sk.calls, want)
+	}
+	sk.err = player.ErrNotSeekable
+	if _, err := b.SeekBy(ctx, time.Second); !errors.Is(err, tui.ErrNotSeekable) {
+		t.Errorf("keys, not seekable: %v", err)
+	}
+	if c.Seek(ctx, time.Second) != nil || c.SetPosition(ctx, 4, time.Second) != nil {
+		t.Error("mpris, not seekable: error returned")
+	}
+	other := errors.New("ipc")
+	sk.err = other
+	if _, err := b.SeekBy(ctx, time.Second); !errors.Is(err, other) {
+		t.Errorf("keys, failure: %v", err)
+	}
+	if !errors.Is(c.Seek(ctx, time.Second), other) || !errors.Is(c.SetPosition(ctx, 4, time.Second), other) {
+		t.Error("mpris, failure not returned")
+	}
+	// Without a seeker nothing happens.
+	b.sk = nil
+	if _, err := b.SeekBy(ctx, time.Second); !errors.Is(err, tui.ErrNotSeekable) {
+		t.Errorf("no seeker: %v", err)
+	}
+	if c.Seek(ctx, time.Second) != nil || c.SetPosition(ctx, 4, time.Second) != nil {
+		t.Error("no seeker: error returned")
+	}
+	// The player's seek count reaches MPRIS, which announces it.
+	if st := mprisState(tui.NowPlaying{}, player.Status{SeekID: 3}); st.SeekID != 3 || st.CanSeek {
+		t.Errorf("state %+v", st)
+	}
 }
 
 // TASK-018: the volume keys and MPRIS reach the player, and a refusal
@@ -127,14 +191,14 @@ func TestMPRISState(t *testing.T) {
 				Track: &mpris.Track{Handle: 4, ID: "9", Title: "T", Artists: "A", Album: "Al", Length: time.Minute}}},
 		{"paused, upcoming, player duration", tui.NowPlaying{State: tui.Paused, Current: cur, Upcoming: []tui.QueueItem{{}}, Duration: 2 * time.Minute,
 			Position: time.Second, Shuffle: true, Repeat: tui.RepeatOne}, 150,
-			mpris.State{Status: mpris.Paused, Loop: mpris.LoopTrack, Volume: 1, CanNext: true, CanPrev: true, Position: time.Second, Shuffle: true,
+			mpris.State{Status: mpris.Paused, Loop: mpris.LoopTrack, Volume: 1, CanNext: true, CanPrev: true, CanSeek: true, Position: time.Second, Shuffle: true,
 				Track: &mpris.Track{Handle: 4, ID: "9", Title: "T", Artists: "A", Album: "Al", Length: 2 * time.Minute}}},
 		{"last track, no repeat", tui.NowPlaying{State: tui.Playing, Current: cur}, -5,
-			mpris.State{Status: mpris.Playing, Loop: mpris.LoopNone, CanPrev: true,
+			mpris.State{Status: mpris.Playing, Loop: mpris.LoopNone, CanPrev: true, CanSeek: true,
 				Track: &mpris.Track{Handle: 4, ID: "9", Title: "T", Artists: "A", Album: "Al", Length: time.Minute}}},
 	}
 	for _, tt := range tests {
-		if got := mprisState(tt.np, tt.vol); !reflect.DeepEqual(got, tt.want) {
+		if got := mprisState(tt.np, player.Status{Volume: tt.vol}); !reflect.DeepEqual(got, tt.want) {
 			t.Errorf("%s:\n got  %+v\n want %+v", tt.name, got, tt.want)
 		}
 	}

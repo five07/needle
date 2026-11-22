@@ -122,6 +122,8 @@ type Services struct {
 	Settings SettingsService
 	// Volume, when set, is changed by the volume keys (decision 82).
 	Volume Volume
+	// Seek, when set, is moved by the seek keys (decision 89).
+	Seek Seeker
 	// Logger receives failures in full; the UI shows short messages.
 	Logger *slog.Logger
 	// Tick schedules fn after d. Default tea.Tick (tests replace it).

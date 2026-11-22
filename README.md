@@ -90,8 +90,9 @@ Sections that are not built yet say so in the main pane. Playing and queueing ar
 | `c` | Autoplay radio: on, off |
 | `v` | Visualizer: on, off |
 | `-` / `=` | Volume down / up by 5% (software volume; see Volume) |
+| `,` / `.` | Seek back / forward in the current track (hold to go faster; see Seeking) |
 
-While the search input has focus, letters, `-`, `=`, and `space` type into it, so `q`, `j`, `space`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
+While the search input has focus, letters, `-`, `=`, `,`, `.`, and `space` type into it, so `q`, `j`, `space`, and the other single-letter keys do not act. Press `esc` (or `enter`, or `tab` to go straight to the next tab) to leave the input.
 
 The hint line shows as many keys as fit; `?` lists them all. Tabbed views put their most important keys first so they stay visible on small terminals: `/ search` and `tab` in Search, `tab` in an artist view, `/ filter` and `tab` in the Library, and `tab` in Discovery.
 
@@ -129,7 +130,7 @@ The bar at the bottom shows, centered, top to bottom:
 1. The track title, bold. A title too wide for the bar scrolls across it endlessly. (Drawing it at 2x size in terminals that support kitty's text sizing is planned as its own task.)
 2. The artists and the album.
 3. The format: what TIDAL sent, what reaches the sound card, the audio mode, and the bit-perfect indicator, for example `FLAC 24/96 → out 24/96 · exclusive · ✓ bit-perfect`. When the output differs from the source, the indicator turns yellow and says why, for example `⚠ resampled to 48 kHz (source 96 kHz)`. Previews are marked `PREVIEW`. While the software volume is below 100%, `vol 70%` (for example) follows the indicator.
-4. Elapsed time, a progress bar, and the track length. The progress bar is display only.
+4. Elapsed time, a progress bar, and the track length. The progress bar is display only: seek with `,` and `.`.
 5. The controls: shuffle (`⇄ on`/`off`), previous, play/pause, next, repeat (`↻ off`/`all`/`one`), and autoplay (`∞ on`/`off`). Click any of them.
 
 With the visualizer on (`v`), a spectrum of the music fills the bar's background: 32 frequency bands from 40 Hz to 10 kHz, lows on the left, drawn in the free cells around the text so no text is covered. Each bar is shaded in 4 steps, darker at the bottom and brighter at the top, in the theme chosen in Settings.
@@ -228,6 +229,15 @@ needle compares the source format with what the sound card is actually running, 
 
 The source bit depth comes from TIDAL's stream description. When it is missing, the indicator requires 24-bit output before claiming bit-perfect.
 
+### Seeking
+
+`,` seeks back and `.` seeks forward in the current track. Presses less than 400 ms apart form a run in which the step grows: the first two presses move 5 seconds, the next two 10 seconds, and every later one 30 seconds. Holding the key does this on its own. A pause of 400 ms or more, or a change of direction, starts again at 5 seconds. Each press shows the step and the new position in the hint line, for example `» 10 s · 1:42`, and the progress bar moves at once.
+
+- Seeking stays within the track: back stops at 0:00, and forward stops 3 seconds before the end, so the track ends on its own and the next one follows as usual (gapless when it can be). It never skips to the next or previous track.
+- A paused track stays paused. While a track is loading, or with nothing playing, the keys do nothing. A preview seeks within its 30 seconds.
+- Many presses in a row are combined: mpv gets at most one seek every 150 ms, to the latest position, so a held key does not restart the stream for every press.
+- Clicking the progress bar does not seek.
+
 ### Volume
 
 `-` and `=` lower and raise needle's software volume in 5% steps, with a notice of the new level. Software volume never goes above 100% (no gain), and every start is at 100%, so playback starts bit-perfect. The level is not saved, but it lasts across audio output switches while software volume is allowed. Desktop widgets can change it too (see MPRIS).
@@ -258,8 +268,9 @@ Quitting while a track plays fades the output to silence first (about 100 ms), t
 While it runs, needle appears on the D-Bus session bus as `org.mpris.MediaPlayer2.needle` (a second copy adds `.instance<pid>`), so media keys, `playerctl`, and bar widgets such as Waybar's `mpris` module and omarchy-shell can show and control it:
 
 - **Shown:** title, artists, album, length, the TIDAL track link, playing/paused/stopped, shuffle, and repeat (`None`, `Track`, or `Playlist`), updated as they change.
-- **Controls:** play, pause, play/pause, stop, next, previous, setting shuffle and repeat, and setting the volume. Volume writes set the software volume (values below 0 count as 0, above 1 as 1) wherever the volume keys work; while the volume is on the output device they are refused with `NotSupported`.
-- **Not supported:** seeking (`CanSeek` is false), album art, and raising or quitting the app.
+- **Controls:** play, pause, play/pause, stop, next, previous, seeking, setting shuffle and repeat, and setting the volume. Volume writes set the software volume (values below 0 count as 0, above 1 as 1) wherever the volume keys work; while the volume is on the output device they are refused with `NotSupported`.
+- **Seeking:** `CanSeek` is true while a track plays or is paused. `Seek` (relative) and `SetPosition` (absolute, for the current track only) follow the limits of the seek keys: they stop at 0:00 and 3 seconds before the end instead of going to the next track as the MPRIS spec suggests. Every seek, from the keys too, emits `Seeked` so widgets update their position.
+- **Not supported:** album art, and raising or quitting the app.
 
 Without a session bus (for example over SSH), needle logs a warning and runs without desktop integration. Try it with:
 

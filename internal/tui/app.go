@@ -104,6 +104,9 @@ type Model struct {
 	marqueeFrom  time.Time
 	marqueeOn    bool
 	marqueeGen   int
+
+	// seekRun is the current run of seek key presses (decision 90).
+	seekRun seekRun
 }
 
 // New returns the shell with the given section views.
@@ -220,6 +223,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(m.nowPlayingChanged(), m.startMarquee(), m.listenStatus())
 	case marqueeMsg:
 		return m, m.onMarquee(msg)
+	case seekedMsg:
+		return m, m.onSeeked(msg)
 	case PopMsg:
 		m.pop()
 	case CloseMsg:
@@ -306,6 +311,10 @@ func (m *Model) onKey(k tea.KeyPressMsg) tea.Cmd {
 		return m.svc.volumeCmd(-VolumeStep)
 	case key.Matches(k, Keys.VolumeUp):
 		return m.svc.volumeCmd(VolumeStep)
+	case key.Matches(k, Keys.SeekBack):
+		return m.seek(-1)
+	case key.Matches(k, Keys.SeekForward):
+		return m.seek(1)
 	case key.Matches(k, Keys.Visualizer):
 		if v := m.svc.Visualizer; v != nil {
 			v.SetOn(!v.On())

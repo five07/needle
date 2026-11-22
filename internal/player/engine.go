@@ -26,6 +26,9 @@ var (
 	// ErrVolumeDisabled means software volume is off: exclusive mode with
 	// the volume on the output device (decision 84).
 	ErrVolumeDisabled = errors.New("player: volume is controlled on the output device in exclusive mode")
+	// ErrNotSeekable means there is no track to seek in: nothing is
+	// playing or paused, or the track is still loading (decision 93).
+	ErrNotSeekable = errors.New("player: nothing to seek in")
 )
 
 // Item is one track handed to the engine.
@@ -85,6 +88,9 @@ type Event struct {
 	Position time.Duration
 	// Duration is the item duration when known (EventProgress).
 	Duration time.Duration
+	// Seeks is how many seeks the engine had made when Position was
+	// sampled (EventProgress), so a sample taken before a seek is ignored.
+	Seeks uint64
 	// Format fields (EventFormat).
 	Decoded AudioParams
 	Output  AudioParams
@@ -106,6 +112,9 @@ type Engine interface {
 	// SetVolume sets software volume (0-100). The Player decides whether
 	// software volume is allowed; the engine applies it in either mode.
 	SetVolume(ctx context.Context, percent float64) error
+	// Seek moves the playing item with Key to position. It fails when that
+	// item is not the one playing. A paused item stays paused.
+	Seek(ctx context.Context, key uint64, position time.Duration) error
 	// Stop stops playback and drops any preloaded item.
 	Stop(ctx context.Context) error
 	// Events delivers engine events. It is closed after Close.

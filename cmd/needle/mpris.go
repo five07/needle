@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"time"
 
 	"github.com/five07/needle/internal/mpris"
 	"github.com/five07/needle/internal/player"
@@ -55,15 +56,43 @@ func (c mprisControls) SetVolume(ctx context.Context, v float64) error {
 	return err
 }
 
-// mprisState converts a UI snapshot and the player volume for MPRIS.
-func mprisState(np tui.NowPlaying, volume float64) mpris.State {
+// Seek moves the current track from MPRIS (decision 95). Nothing to seek
+// in is not an error: the spec says to ignore the call.
+func (c mprisControls) Seek(ctx context.Context, offset time.Duration) error {
+	if c.b.sk == nil {
+		return nil
+	}
+	_, err := c.b.sk.SeekBy(ctx, offset)
+	if errors.Is(err, player.ErrNotSeekable) {
+		return nil
+	}
+	return err
+}
+
+// SetPosition moves queue entry h to position from MPRIS, when it is the
+// current track; otherwise the call is ignored, as the spec says.
+func (c mprisControls) SetPosition(ctx context.Context, h uint64, position time.Duration) error {
+	if c.b.sk == nil {
+		return nil
+	}
+	_, err := c.b.sk.SeekTo(ctx, queue.Handle(h), position)
+	if errors.Is(err, player.ErrNotSeekable) {
+		return nil
+	}
+	return err
+}
+
+// mprisState converts a UI snapshot and the player status for MPRIS.
+func mprisState(np tui.NowPlaying, ps player.Status) mpris.State {
 	st := mpris.State{
 		Position: np.Position,
 		Shuffle:  np.Shuffle,
 		Loop:     [...]mpris.Loop{tui.RepeatOff: mpris.LoopNone, tui.RepeatAll: mpris.LoopPlaylist, tui.RepeatOne: mpris.LoopTrack}[np.Repeat],
-		Volume:   min(max(volume/100, 0), 1),
+		Volume:   min(max(ps.Volume/100, 0), 1),
 		CanNext:  len(np.Upcoming) > 0 || (np.Current != nil && (np.Repeat != tui.RepeatOff || np.Autoplay)),
 		CanPrev:  np.Current != nil, // previous restarts the first track
+		CanSeek:  np.Current != nil && (np.State == tui.Playing || np.State == tui.Paused),
+		SeekID:   ps.SeekID,
 	}
 	switch np.State {
 	case tui.Playing, tui.Loading:

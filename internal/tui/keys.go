@@ -51,6 +51,9 @@ type KeyMap struct {
 	Visualizer key.Binding
 	VolumeDown key.Binding
 	VolumeUp   key.Binding
+	// Seeking within the track (decision 89).
+	SeekBack    key.Binding
+	SeekForward key.Binding
 }
 
 // Keys is the default keymap (UI.md section 5).
@@ -94,10 +97,13 @@ var Keys = KeyMap{
 	Visualizer: key.NewBinding(key.WithKeys("v"), key.WithHelp("v", "visualizer on/off")),
 	VolumeDown: key.NewBinding(key.WithKeys("-"), key.WithHelp("-", "volume down")),
 	VolumeUp:   key.NewBinding(key.WithKeys("="), key.WithHelp("=", "volume up")),
+
+	SeekBack:    key.NewBinding(key.WithKeys(","), key.WithHelp(",", "seek back")),
+	SeekForward: key.NewBinding(key.WithKeys("."), key.WithHelp(".", "seek forward")),
 }
 
 func (k KeyMap) playbackGroup() helpGroup {
-	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay, k.Visualizer, k.VolumeDown, k.VolumeUp}}
+	return helpGroup{"Playback", []key.Binding{k.PlayPause, k.NextTrack, k.PrevTrack, k.Shuffle, k.Repeat, k.Autoplay, k.Visualizer, k.VolumeDown, k.VolumeUp, k.SeekBack, k.SeekForward}}
 }
 
 // helpGroup is a titled list of bindings in the help overlay.
