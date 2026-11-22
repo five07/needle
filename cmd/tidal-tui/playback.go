@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/five07/tidal-tui/internal/config"
 	"github.com/five07/tidal-tui/internal/player"
@@ -163,6 +164,9 @@ type watch struct {
 	q       *queue.Queue[player.Track]
 	changed <-chan struct{} // signaled after queue edits
 	mode    config.AudioMode
+	// best, when set, records the best quality received (decision 52).
+	best *bestQuality
+	now  func() time.Time // default time.Now
 }
 
 // watchStatus forwards player changes to the UI until ctx ends. It is the
@@ -178,7 +182,16 @@ func watchStatus(ctx context.Context, p statusSource, w watch) {
 		}
 		st := p.Status()
 		if w.status != nil {
-			sendLatest(w.status, nowPlaying(st, w.q.Snapshot(), w.mode))
+			np := nowPlaying(st, w.q.Snapshot(), w.mode)
+			if w.best != nil {
+				now := time.Now
+				if w.now != nil {
+					now = w.now
+				}
+				w.best.offer(st, now())
+				np.Best, np.BestSeen = w.best.label(), w.best.seen
+			}
+			sendLatest(w.status, np)
 		}
 		if msg := st.Message; msg != "" && msg != last {
 			select {

@@ -1,34 +1,30 @@
 ---
-id: TASK-014
-title: Login and account view
+id: TASK-027
+title: Edit Account audio settings in the TUI
 status: To Do
 assignee: []
-created_date: '2026-11-22T03:53:36Z'
-updated_date: '2026-11-22T04:28:53Z'
+created_date: '2026-11-22T17:46:12Z'
 labels:
   - tui
-  - auth
-milestone: m-2
+  - post-mvp
 dependencies:
-  - TASK-005
-  - TASK-009
-priority: medium
-type: feature
-ordinal: 14000
+  - TASK-014
+priority: low
+ordinal: 27000
 ---
 
 ## Description
 
 <!-- SECTION:DESCRIPTION:BEGIN -->
-The login flow and account info from task-005 need a UI surface.
+The Account view (TASK-014) shows the quality, audio mode, and audio device settings read-only, and they can only be changed in config.toml followed by a restart. Let the user change them from the Account view.
 <!-- SECTION:DESCRIPTION:END -->
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 Unauthenticated launch shows a login screen with the authorize URL and waits for the PKCE callback
-- [ ] #2 Account view shows username, country, and email from GET /users/me
-- [ ] #3 Account view shows the highest quality received so far, since the API exposes no subscription tier
-- [ ] #4 Logout from the account view returns to the login screen
+- [ ] #1 The quality, audio mode, and audio device can be changed from the Account view
+- [ ] #2 The device choice lists the devices tidal-tui -list-devices shows for the selected mode
+- [ ] #3 Changes are saved to config.toml, keeping the file's other settings and comments
+- [ ] #4 Changes apply without restarting, or the view says clearly that a restart is needed
 <!-- AC:END -->
 
 ## Definition of Done

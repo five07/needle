@@ -142,6 +142,11 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 			fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
 			return 1
 		}
+		if err := forgetBestQuality(dirs.State); err != nil {
+			logger.Error("logout failed", "err", err)
+			fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
+			return 1
+		}
 		logger.Info("logged out")
 		fmt.Fprintln(stdout, "Logged out.")
 		return 0
@@ -169,7 +174,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 	}
 	fmt.Fprintf(stdout, "Logged in as %s (%s).\n", user.Username, user.Country)
 
-	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, localeFromEnv(getenv), logger)
+	model, stopPlayer, err := newUI(ctx, d, cfg, client, user, localeFromEnv(getenv), dirs.State, logger)
 	if err != nil {
 		logger.Error("ui setup failed", "err", err)
 		fmt.Fprintf(stderr, "tidal-tui: %v\n", err)
@@ -191,7 +196,7 @@ func run(ctx context.Context, d deps, args []string, getenv func(string) string,
 // starts mpv on first playback). stop ends the player and waits for it to
 // close mpv.
 func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client, user tidal.User,
-	locale string, logger *slog.Logger) (model tea.Model, stop func(), err error) {
+	locale, stateDir string, logger *slog.Logger) (model tea.Model, stop func(), err error) {
 	catalog, err := tidal.NewCatalog(client, user.Country)
 	if err != nil {
 		return nil, nil, err
@@ -219,13 +224,23 @@ func newUI(ctx context.Context, d deps, cfg config.Config, client *tidal.Client,
 	notices := make(chan string, 4)
 	status := make(chan tui.NowPlaying, 1)
 	pb := &playback{q: q, p: p, changed: make(chan struct{}, 1)}
-	go watchStatus(uiCtx, p, watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode})
+	var best *bestQuality
+	if stateDir != "" {
+		best = loadBestQuality(filepath.Join(stateDir, BestQualityFile), logger)
+	} else {
+		best = &bestQuality{logger: logger} // not remembered
+	}
+	go watchStatus(uiCtx, p, watch{notices: notices, status: status, q: q, changed: pb.changed, mode: cfg.Audio.Mode, best: best})
+	acct := tui.AccountInfo{Username: user.Username, Country: user.Country, Email: user.Email, EmailVerified: user.EmailVerified,
+		Quality: string(cfg.Quality), AudioMode: string(cfg.Audio.Mode), AudioDevice: cfg.Audio.Device}
 
+	svc := &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
+		Playback: pb, Transport: pb, Logger: logger}
 	model = tui.New(tui.Config{
-		Services: &tui.Services{Ctx: uiCtx, Catalog: catalog, Library: catalog, Discovery: catalog,
-			Playback: pb, Transport: pb, Logger: logger},
-		Notices: notices,
-		Status:  status,
+		Services: svc,
+		Account:  tui.NewAccountView(svc, acct),
+		Notices:  notices,
+		Status:   status,
 	})
 	return model, func() { cancel(); <-done }, nil
 }

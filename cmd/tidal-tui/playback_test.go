@@ -121,6 +121,7 @@ type stubStatus struct {
 	mu      sync.Mutex
 	updates chan struct{}
 	pending []string
+	status  *player.Status // the rest of each status, when set
 }
 
 func (s *stubStatus) Updates() <-chan struct{} { return s.updates }
@@ -129,7 +130,12 @@ func (s *stubStatus) Status() player.Status {
 	defer s.mu.Unlock()
 	msg := s.pending[0]
 	s.pending = s.pending[1:]
-	return player.Status{Message: msg}
+	st := player.Status{}
+	if s.status != nil {
+		st = *s.status
+	}
+	st.Message = msg
+	return st
 }
 func (s *stubStatus) set(msg string) {
 	s.mu.Lock()
@@ -322,12 +328,12 @@ func TestNewUIErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 	d := defaultDeps
-	if _, _, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "us"}, "", discardLogger()); err == nil {
+	if _, _, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "us"}, "", "", discardLogger()); err == nil {
 		t.Error("invalid country accepted")
 	}
 	cfg := testConfig()
 	cfg.Quality = "loud"
-	if _, _, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, "", discardLogger()); err == nil {
+	if _, _, err := newUI(context.Background(), d, cfg, c, tidal.User{Country: "US"}, "", "", discardLogger()); err == nil {
 		t.Error("invalid quality accepted")
 	}
 	// The player starts the configured engine with the audio settings.
@@ -400,7 +406,7 @@ func TestNewUIIgnoresBadLocale(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, stop, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "US"}, "english", discardLogger())
+	_, stop, err := newUI(context.Background(), d, testConfig(), c, tidal.User{Country: "US"}, "english", t.TempDir(), discardLogger())
 	if err != nil {
 		t.Fatal(err)
 	}

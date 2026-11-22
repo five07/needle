@@ -1,0 +1,24 @@
+┌ tidal-tui ────────────────────────────────────────────────── ? help ─ q quit ┐
+│   Search      │ Account                                                      │
+│   Library     │   Username         listener                                  │
+│   Discovery   │   Country          US                                        │
+│   Queue       │   Email            listener@example.com                      │
+│ ▸ Account     │   Highest quality  FLAC 24/192 (first seen 2026-11-22)       │
+│               │   TIDAL does not share your plan; this is the best received. │
+│               │                                                              │
+│               │ Audio settings                                               │
+│               │   Quality          hires                                     │
+│               │   Mode             exclusive                                 │
+│               │   Device           alsa/hw:CARD=DAC,DEV=0                    │
+│               │   Change these in config.toml and restart.                   │
+│               │                                                              │
+├───────────────┴──────────────────────────────────────────────────────────────┤
+│                                                                              │
+│                                                                              │
+│                               Nothing playing                                │
+│                                                                              │
+│                                                                              │
+│                                                                              │
+├──────────────────────────────────────────────────────────────────────────────┤
+│ j/k move · h back · / search · ? help · q quit                               │
+└──────────────────────────────────────────────────────────────────────────────┘

@@ -309,6 +309,20 @@ API facts below come from the official OpenAPI spec v1.10.258 and a live probe o
     - b) `D` clears at once, with a notice saying how many tracks were removed.
     > MS: a
 
+### TASK-014 (account view)
+
+The scope was simplified: login stays in the terminal before the TUI starts (it already works that way), and logout stays the `-logout` flag. Questions 50, 51, and 54 no longer apply and were removed.
+
+52. **"Highest quality received so far" (AC #2).**
+    - a) **(Recommended)** Remembered across runs in a small file under `$XDG_STATE_HOME/tidal-tui/`, so it says what your account can get (for example "FLAC 24/192, first seen 2026-11-22"). `tidal-tui -logout` forgets it.
+    - b) This session only; it says "nothing played yet" until the first track starts.
+    > MS: a
+
+53. **Other lines in the Account view.** UI.md guessed at the audio settings here.
+    - a) **(Recommended)** Also show the `quality` setting, the audio mode, and the audio device, read-only, with a hint that they are set in `config.toml`.
+    - b) Only the AC fields: username, country, email, and highest quality.
+    > MS: a
+
 ### Rename to `needle`
 
 The product name `tidal-tui` puts TIDAL's trademark in the name, so the project becomes `needle`. Describing it as "a terminal client for TIDAL" stays, since that only names the service it works with. Checked on 2026-11-22: there is no `needle` package in the AUR or the Arch repos (`needle-cli`, an unrelated GitHub PR tool, is the closest), and `github.com/five07/needle` is free.
@@ -399,6 +413,9 @@ These are the answers to the questions above. Backlog tasks are written to match
 | 47 | Now-playing title | Bold on 2 rows (the second row blank); the real 2x title (OSC 66) is its own task, starting with a spike in kitty. |
 | 48 | Enter on the current track | Same track ID as the current track, in any list, toggles pause. |
 | 49 | Clearing the queue | `D` asks first ("Press D again to clear the queue"); a second `D` within 2 s clears the upcoming tracks. |
+| 50 | TASK-014 scope | Login stays in the terminal before the TUI starts; logout stays the `-logout` flag. TASK-014 is the Account view only. |
+| 52 | Highest quality | Remembered across runs in a file under `$XDG_STATE_HOME/tidal-tui/`, with the date first seen; `-logout` deletes it. |
+| 53 | Account view lines | Username, country, email, highest quality, and the read-only `quality`, audio mode, and device settings with a pointer to `config.toml`. |
 
 ## Definition of Done
 

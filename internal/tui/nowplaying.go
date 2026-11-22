@@ -80,6 +80,10 @@ type NowPlaying struct {
 	Preview bool
 	Shuffle bool
 	Repeat  RepeatMode
+	// Best is the highest quality TIDAL has delivered, for example
+	// "FLAC 24/192", and BestSeen when it first arrived (TASK-014).
+	Best     string
+	BestSeen time.Time
 }
 
 // NowPlayingMsg delivers a new player snapshot.

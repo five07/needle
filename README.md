@@ -6,7 +6,7 @@ tidal-tui is a legitimate client: it uses only the [official TIDAL API](https://
 
 ## Status
 
-Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar and the Queue view are in place too; the Account view is next. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
+Early development. Configuration, the API client, login, the play queue, stream selection, the audio engine, the terminal UI shell, Search (with playback from results), the Library (favorites and playlists), and Discovery (mixes, radio, and similar items) are in place. The now-playing bar, the Queue view, and the Account view are in place too. See `PLAN.md` for the plan and decisions, and run `backlog board` for task status.
 
 The TIDAL developer access tier this project currently has serves **30-second previews** only. Full-track playback needs a higher tier, which is being requested from TIDAL. Previews are full-quality DRM-free FLAC (up to 24-bit/192 kHz), so the whole playback pipeline can be developed and tested against them.
 
@@ -42,7 +42,7 @@ Tokens are kept in the system keyring through the Secret Service API (GNOME Keyr
 
 Access tokens refresh automatically. If TIDAL revokes the session, tidal-tui asks you to log in again.
 
-To log out and remove stored credentials from both the keyring and the file:
+To log out and remove stored credentials from both the keyring and the file (this also forgets the highest quality shown in the Account view):
 
 ```sh
 ./tidal-tui -logout
@@ -136,6 +136,10 @@ The Queue section lists the track that is playing, then the tracks still to come
 - **`enter`** plays the selected track, or pauses and resumes the one that is playing.
 - **`d`** or **`x`** removes the selected upcoming track. The playing track stays; press `n` to skip it.
 - **`D`** clears every upcoming track. It asks first: press `D` again within 2 seconds. The playing track keeps playing.
+
+### Account
+
+The Account section shows your username, country, and email from TIDAL, and the highest quality TIDAL has sent you, for example `FLAC 24/192 (first seen 2026-11-22)`. TIDAL's API does not say which plan you have, so this is the best evidence of it: it is ranked by sample rate, then bit depth, then lossless over lossy, ignores previews, and is remembered across runs in `$XDG_STATE_HOME/tidal-tui/best_quality.json`. Below that are your `quality`, audio mode, and audio device settings, read-only; change them in `config.toml` and restart.
 
 ### Mouse
 

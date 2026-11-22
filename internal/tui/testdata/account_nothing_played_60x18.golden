@@ -1,0 +1,18 @@
+┌ tidal-tui ────────────────────────────── ? help ─ q quit ┐
+│ S │ Account                                              │
+│ L │   Username         new                               │
+│ D │   Country          GB                                │
+│ Q │   Email            new@example.com (not verified)    │
+│ A │   Highest quality  nothing played yet                │
+│   │   TIDAL does not share your plan; this is the best … │
+│   │                                                      │
+├───┴──────────────────────────────────────────────────────┤
+│                                                          │
+│                                                          │
+│                     Nothing playing                      │
+│                                                          │
+│                                                          │
+│                                                          │
+├──────────────────────────────────────────────────────────┤
+│ j/k move · h back · / search · ? help · q quit           │
+└──────────────────────────────────────────────────────────┘
